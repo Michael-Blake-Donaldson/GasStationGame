@@ -1,0 +1,9 @@
+packages:
+  - .
+
+overrides:
+  vite: 8.1.5
+
+onlyBuiltDependencies:
+  - '@tauri-apps/cli'
+  - esbuild

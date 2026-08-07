@@ -1,0 +1,8 @@
+{
+  "id": "great-plains",
+  "displayName": "Great Plains",
+  "identity": ["Tall grass", "Grain silos", "Endless sky", "Distant livestock"],
+  "pressures": ["High wind", "Grass fire", "Stampede risk", "Moving horizon lights"],
+  "startingThreats": ["Hollow Walkers", "Headlight Men", "Unknown signature creature"],
+  "sliceNightCount": 3
+}

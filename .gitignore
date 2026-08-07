@@ -1,0 +1,25 @@
+# Dependencies and generated web output
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Tauri / Rust
+src-tauri/target/
+
+# Local configuration
+.env
+.env.local
+.env.*.local
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Logs
+*.log
+pnpm-debug.log*
