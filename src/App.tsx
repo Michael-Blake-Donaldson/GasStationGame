@@ -3,14 +3,23 @@ import { gameConfig } from './config/game';
 import { greatPlainsRegion } from './content/regions/greatPlains';
 import { StationScene } from './game/rendering/StationScene';
 import { currentDayNumber } from './game/simulation/advanceSimulation';
-import { executeSimulationCommand } from './game/simulation/commands';
+import {
+  dispatchSimulationCommand,
+  type CommandReceipt,
+} from './game/simulation/commands';
 import { formatClock, wholeMinuteForClockUnit } from './game/simulation/clock';
 import { createInitialState } from './game/simulation/createInitialState';
 import {
   createFixedStepRunner,
   pumpSimulation,
+  type FixedStepRunnerState,
 } from './game/simulation/fixedStepRunner';
-import type { TimeMode } from './game/simulation/types';
+import {
+  presentCommandReceipt,
+  presentDomainEvent,
+  selectRecentDomainEvents,
+} from './game/presentation/domainEventPresentation';
+import type { SimulationState, TimeMode } from './game/simulation/types';
 
 const RESOURCE_LABELS = [
   ['cash', 'Cash', '$'],
@@ -28,8 +37,17 @@ const phaseLabel: Record<string, string> = {
   night: 'Night command',
 };
 
+interface AppRuntime {
+  readonly lastCommandReceipt: CommandReceipt | null;
+  readonly nextCommandSequence: number;
+  readonly runner: FixedStepRunnerState;
+  readonly simulation: SimulationState;
+}
+
 export const App = () => {
-  const [runtime, setRuntime] = useState(() => ({
+  const [runtime, setRuntime] = useState<AppRuntime>(() => ({
+    lastCommandReceipt: null,
+    nextCommandSequence: 0,
     runner: createFixedStepRunner(),
     simulation: createInitialState(1987, gameConfig.verticalSliceNightCount),
   }));
@@ -61,7 +79,13 @@ export const App = () => {
           current.runner,
           elapsedMicroseconds,
         );
-        return { runner: result.runner, simulation: result.simulation };
+        return {
+          ...current,
+          lastCommandReceipt:
+            result.processedSteps > 0 ? null : current.lastCommandReceipt,
+          runner: result.runner,
+          simulation: result.simulation,
+        };
       });
     }, 50);
 
@@ -80,7 +104,13 @@ export const App = () => {
     };
   }, []);
 
-  const topEvent = simulation.events.at(-1);
+  const topEvent = selectRecentDomainEvents(simulation.eventLedger).at(-1);
+  const latestPresentation =
+    runtime.lastCommandReceipt === null
+      ? topEvent === undefined
+        ? null
+        : presentDomainEvent(topEvent)
+      : presentCommandReceipt(runtime.lastCommandReceipt);
   const beaconStatus =
     simulation.resources.power <= 0
       ? 'Dark'
@@ -100,13 +130,21 @@ export const App = () => {
   );
 
   const chooseTimeMode = (mode: TimeMode) => {
-    setRuntime((current) => ({
-      ...current,
-      simulation: executeSimulationCommand(current.simulation, {
-        type: 'time-mode.set',
-        mode,
-      }).state,
-    }));
+    setRuntime((current) => {
+      const sequence = current.nextCommandSequence;
+      const result = dispatchSimulationCommand(current.simulation, {
+        atTick: current.simulation.tick,
+        command: { type: 'time-mode.set', mode },
+        id: `ui-command-${String(sequence)}`,
+        sequence,
+      });
+      return {
+        ...current,
+        lastCommandReceipt: result.receipt,
+        nextCommandSequence: sequence + 1,
+        simulation: result.state,
+      };
+    });
   };
 
   return (
@@ -267,9 +305,14 @@ export const App = () => {
 
       <footer className="event-console">
         <div className="event-icon">!</div>
-        <div>
+        <div
+          aria-atomic="true"
+          aria-live="polite"
+          data-tone={latestPresentation?.tone ?? 'neutral'}
+          role="status"
+        >
           <span className="panel-kicker">Latest station event</span>
-          <strong>{topEvent?.message ?? 'No station events.'}</strong>
+          <strong>{latestPresentation?.message ?? 'No station events.'}</strong>
         </div>
         <span className="seed-label">Seed {simulation.seed}</span>
       </footer>

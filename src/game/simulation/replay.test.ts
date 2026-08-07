@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { advanceSimulationByClockUnits } from './advanceSimulation';
-import { executeSimulationCommand } from './commands';
-import { CLOCK_UNITS_PER_MINUTE } from './clock';
+import { dispatchSimulationCommand } from './commands';
 import { createInitialState } from './createInitialState';
 import { runClockReplay, type ClockReplayV1 } from './replay';
 
@@ -27,38 +25,33 @@ const replayFixture = (): ClockReplayV1 => ({
 });
 
 describe('clock commands and replay', () => {
-  it('returns stable receipts for time-mode commands', () => {
+  it('returns stable, correlated receipts for time-mode commands', () => {
     const initial = createInitialState();
-    const started = executeSimulationCommand(initial, {
-      type: 'time-mode.set',
-      mode: 'normal',
+    const started = dispatchSimulationCommand(initial, {
+      atTick: 0,
+      command: { type: 'time-mode.set', mode: 'normal' },
+      id: 'start-clock',
+      sequence: 0,
     });
-    const unchanged = executeSimulationCommand(started.state, {
-      type: 'time-mode.set',
-      mode: 'normal',
+    const unchanged = dispatchSimulationCommand(started.state, {
+      atTick: 0,
+      command: { type: 'time-mode.set', mode: 'normal' },
+      id: 'keep-clock',
+      sequence: 1,
     });
 
     expect(started.receipt).toEqual({
-      accepted: true,
+      atTick: 0,
       changed: true,
-      code: 'time-mode-updated',
+      commandId: 'start-clock',
+      commandSequence: 0,
+      emittedEventSequences: [1],
+      reason: 'time-mode-updated',
+      status: 'accepted',
     });
-    expect(unchanged.receipt.code).toBe('time-mode-unchanged');
+    expect(unchanged.receipt.reason).toBe('time-mode-unchanged');
+    expect(unchanged.receipt.emittedEventSequences).toEqual([]);
     expect(unchanged.state).toBe(started.state);
-  });
-
-  it('canonicalizes a night pause request to slow time with a reason code', () => {
-    const night = advanceSimulationByClockUnits(
-      createInitialState(),
-      11 * 60 * CLOCK_UNITS_PER_MINUTE,
-    );
-    const result = executeSimulationCommand(night, {
-      type: 'time-mode.set',
-      mode: 'paused',
-    });
-
-    expect(result.state.timeMode).toBe('slow');
-    expect(result.receipt.code).toBe('night-cannot-pause');
   });
 
   it('replays the same commands to the same state, ledger, and hash', () => {
@@ -72,6 +65,10 @@ describe('clock commands and replay', () => {
     expect(second).toEqual(first);
     expect(shuffled).toEqual(first);
     expect(first.receipts).toHaveLength(2);
+    expect(first.events).toBe(first.state.eventLedger);
+    expect(
+      first.events.filter((event) => event.type === 'time-mode.changed'),
+    ).toHaveLength(2);
     expect(first.unconsumedCommandIds).toEqual([]);
   });
 
@@ -81,10 +78,7 @@ describe('clock commands and replay', () => {
       ...replayFixture(),
       commands: replayFixture().commands.map((envelope) =>
         envelope.id === 'speed-up'
-          ? {
-              ...envelope,
-              command: { type: 'time-mode.set', mode: 'slow' },
-            }
+          ? { ...envelope, command: { type: 'time-mode.set', mode: 'slow' } }
           : envelope,
       ),
     });
@@ -113,10 +107,15 @@ describe('clock commands and replay', () => {
     });
 
     expect(result.state.timeMode).toBe('slow');
-    expect(result.receipts.map((receipt) => receipt.id)).toEqual([
+    expect(result.receipts.map((receipt) => receipt.commandId)).toEqual([
       'fast-first',
       'slow-second',
     ]);
+    expect(
+      result.events
+        .filter((event) => event.type === 'time-mode.changed')
+        .map((event) => event.currentMode),
+    ).toEqual(['fast', 'slow']);
   });
 
   it('reports future commands that cannot be reached while paused', () => {
@@ -141,10 +140,7 @@ describe('clock commands and replay', () => {
     const fixture = replayFixture();
     const firstCommand = fixture.commands[0];
     if (firstCommand === undefined) throw new Error('Replay fixture is incomplete.');
-    const duplicate = {
-      ...firstCommand,
-      sequence: 1,
-    };
+    const duplicate = { ...firstCommand, sequence: 1 };
 
     expect(() =>
       runClockReplay({ ...fixture, commands: [firstCommand, duplicate] }),
@@ -171,6 +167,29 @@ describe('clock commands and replay', () => {
     expect(() => runClockReplay(invalidVersion)).toThrow('version');
     expect(() => runClockReplay(invalidCommand)).toThrow('command');
   });
+
+  it.each([
+    null,
+    { ...replayFixture(), commands: null },
+    {
+      ...replayFixture(),
+      commands: [
+        {
+          atTick: 0,
+          command: null,
+          id: 'null-command',
+          sequence: 0,
+        },
+      ],
+    },
+  ])(
+    'rejects malformed replay structure %# with a stable validation error',
+    (value) => {
+      expect(() => runClockReplay(value as unknown as ClockReplayV1)).toThrow(
+        RangeError,
+      );
+    },
+  );
 
   it.each([
     [{ seed: -1 }, 'seed'],

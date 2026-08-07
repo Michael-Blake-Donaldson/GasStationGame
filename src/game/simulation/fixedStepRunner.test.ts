@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { withTimeMode } from './advanceSimulation';
+import type { SimulationState, TimeMode } from './types';
 import { CLOCK_UNITS_PER_MINUTE } from './clock';
 import { createInitialState } from './createInitialState';
 import {
@@ -7,7 +7,11 @@ import {
   pumpSimulation,
   type FixedStepRunnerState,
 } from './fixedStepRunner';
-import type { SimulationState } from './types';
+
+const stateWithTimeMode = (
+  state: SimulationState,
+  timeMode: TimeMode,
+): SimulationState => ({ ...state, timeMode });
 
 const pumpChunks = (
   simulation: SimulationState,
@@ -27,7 +31,7 @@ const pumpChunks = (
 
 describe('fixed-step runner', () => {
   it('produces identical state for irregular timer callback partitions', () => {
-    const initial = withTimeMode(createInitialState(), 'normal');
+    const initial = stateWithTimeMode(createInitialState(), 'normal');
     const single = pumpChunks(initial, [10_000_000]);
     const chunked = pumpChunks(initial, [1_234_567, 2_345_678, 3_456_789, 2_962_966]);
 
@@ -36,7 +40,7 @@ describe('fixed-step runner', () => {
   });
 
   it('preserves cadence independence across deterministic partition families', () => {
-    const initial = withTimeMode(createInitialState(), 'normal');
+    const initial = stateWithTimeMode(createInitialState(), 'normal');
     const expected = pumpChunks(initial, [5_000_000]);
 
     for (let partition = 1; partition <= 20; partition += 1) {
@@ -55,7 +59,7 @@ describe('fixed-step runner', () => {
   });
 
   it('retains capped catch-up debt until later pumps drain it', () => {
-    const initial = withTimeMode(createInitialState(), 'normal');
+    const initial = stateWithTimeMode(createInitialState(), 'normal');
     const uncapped = pumpSimulation(
       initial,
       createFixedStepRunner(),
@@ -76,7 +80,7 @@ describe('fixed-step runner', () => {
     const initial = createInitialState();
     const paused = pumpSimulation(initial, createFixedStepRunner(), 1_050_000);
     const unpaused = pumpSimulation(
-      withTimeMode(paused.simulation, 'normal'),
+      stateWithTimeMode(paused.simulation, 'normal'),
       paused.runner,
       50_000,
     );
@@ -119,7 +123,7 @@ describe('fixed-step runner', () => {
   it('rejects accumulator overflow before advancing simulation', () => {
     expect(() =>
       pumpSimulation(
-        withTimeMode(createInitialState(), 'normal'),
+        stateWithTimeMode(createInitialState(), 'normal'),
         { accumulatedMicroseconds: Number.MAX_SAFE_INTEGER },
         1,
       ),
@@ -136,7 +140,11 @@ describe('fixed-step runner', () => {
     const result = pumpSimulation(initial, createFixedStepRunner(), 1_000_000);
 
     expect(result.simulation.isSliceComplete).toBe(true);
-    expect(result.simulation.events.at(-1)?.message).toContain('1-night');
+    const event = result.simulation.eventLedger.at(-1);
+    expect(event?.type).toBe('slice.completed');
+    if (event?.type === 'slice.completed') {
+      expect(event.targetNightCount).toBe(1);
+    }
     expect(result.runner.accumulatedMicroseconds).toBe(0);
     expect(result.processedSteps).toBe(1);
   });

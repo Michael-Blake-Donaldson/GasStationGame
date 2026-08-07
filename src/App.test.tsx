@@ -66,4 +66,50 @@ describe('App simulation timer', () => {
       root.unmount();
     });
   });
+
+  it('announces command receipts and subsequent domain events', () => {
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(<App />);
+    });
+
+    const status = container.querySelector('[role="status"]');
+    const buttons = [...container.querySelectorAll('button')];
+    const pausedButton = buttons.find((button) =>
+      button.textContent.includes('paused'),
+    );
+    const normalButton = buttons.find((button) =>
+      button.textContent.includes('normal'),
+    );
+    expect(status?.getAttribute('aria-live')).toBe('polite');
+    expect(status?.getAttribute('aria-atomic')).toBe('true');
+    expect(pausedButton).toBeDefined();
+    expect(normalButton).toBeDefined();
+    if (pausedButton === undefined || normalButton === undefined) {
+      throw new Error('Time controls are missing.');
+    }
+
+    act(() => {
+      pausedButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(status?.textContent).toContain('Time mode is already selected.');
+
+    act(() => {
+      normalButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(status?.textContent).toContain('Time mode updated.');
+
+    for (let callback = 0; callback < 2; callback += 1) {
+      now += 50;
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
+    }
+    expect(status?.textContent).toContain('Time mode set to normal.');
+
+    act(() => {
+      root.unmount();
+    });
+  });
 });

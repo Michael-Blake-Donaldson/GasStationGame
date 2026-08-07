@@ -1,19 +1,14 @@
 import { advanceSimulationStep } from './advanceSimulation';
 import {
-  executeSimulationCommand,
+  dispatchSimulationCommand,
+  type CommandEnvelope,
   type CommandReceipt,
-  type SimulationCommand,
 } from './commands';
 import { hashSimulationState } from './checkpoint';
 import { createInitialState } from './createInitialState';
-import type { SimulationEvent, SimulationState, TimeMode } from './types';
+import type { DomainEvent, SimulationState, TimeMode } from './types';
 
-export interface ClockCommandEnvelope {
-  readonly atTick: number;
-  readonly command: SimulationCommand;
-  readonly id: string;
-  readonly sequence: number;
-}
+export type ClockCommandEnvelope = CommandEnvelope;
 
 export interface ClockReplayV1 {
   readonly commands: readonly ClockCommandEnvelope[];
@@ -23,15 +18,9 @@ export interface ClockReplayV1 {
   readonly targetNightCount: number;
 }
 
-export interface ReplayCommandReceipt extends CommandReceipt {
-  readonly atTick: number;
-  readonly id: string;
-  readonly sequence: number;
-}
-
 export interface ClockReplayResult {
-  readonly events: readonly SimulationEvent[];
-  readonly receipts: readonly ReplayCommandReceipt[];
+  readonly events: readonly DomainEvent[];
+  readonly receipts: readonly CommandReceipt[];
   readonly state: SimulationState;
   readonly stateHash: string;
   readonly unconsumedCommandIds: readonly string[];
@@ -45,10 +34,30 @@ const assertNonNegativeSafeInteger = (value: number, name: string): void => {
   }
 };
 
-const validateReplay = (replay: ClockReplayV1): void => {
-  const replayVersion: number = replay.replayVersion;
+const isRecord = (value: unknown): value is Record<PropertyKey, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const validateReplay: (replay: unknown) => asserts replay is ClockReplayV1 = (
+  replay,
+) => {
+  if (!isRecord(replay)) {
+    throw new RangeError('Clock replay must be an object.');
+  }
+
+  const replayVersion = replay.replayVersion;
   if (replayVersion !== 1) {
     throw new RangeError('Unsupported clock replay version.');
+  }
+
+  if (typeof replay.seed !== 'number') throw new RangeError('seed must be a number.');
+  if (typeof replay.stopAfterTick !== 'number') {
+    throw new RangeError('stopAfterTick must be a number.');
+  }
+  if (typeof replay.targetNightCount !== 'number') {
+    throw new RangeError('targetNightCount must be a number.');
+  }
+  if (!Array.isArray(replay.commands)) {
+    throw new RangeError('commands must be an array.');
   }
 
   assertNonNegativeSafeInteger(replay.seed, 'seed');
@@ -60,13 +69,22 @@ const validateReplay = (replay: ClockReplayV1): void => {
   const ids = new Set<string>();
   const sequences = new Set<number>();
 
-  for (const envelope of replay.commands) {
+  for (const envelope of replay.commands as readonly unknown[]) {
+    if (!isRecord(envelope)) {
+      throw new RangeError('Command envelopes must be objects.');
+    }
     if (typeof envelope.id !== 'string' || envelope.id.trim().length === 0) {
       throw new RangeError('Command ids must be non-empty strings.');
     }
     if (ids.has(envelope.id)) throw new RangeError('Command ids must be unique.');
     ids.add(envelope.id);
 
+    if (typeof envelope.atTick !== 'number') {
+      throw new RangeError('command.atTick must be a number.');
+    }
+    if (typeof envelope.sequence !== 'number') {
+      throw new RangeError('command.sequence must be a number.');
+    }
     assertNonNegativeSafeInteger(envelope.atTick, 'command.atTick');
     assertNonNegativeSafeInteger(envelope.sequence, 'command.sequence');
     if (sequences.has(envelope.sequence)) {
@@ -74,10 +92,13 @@ const validateReplay = (replay: ClockReplayV1): void => {
     }
     sequences.add(envelope.sequence);
 
-    const commandType: string = envelope.command.type;
+    if (!isRecord(envelope.command)) {
+      throw new RangeError('Replay command payloads must be objects.');
+    }
+    const commandType = envelope.command.type;
     if (
       commandType !== 'time-mode.set' ||
-      !TIME_MODES.includes(envelope.command.mode)
+      !TIME_MODES.includes(envelope.command.mode as TimeMode)
     ) {
       throw new RangeError('Unsupported clock replay command.');
     }
@@ -92,34 +113,25 @@ export const runClockReplay = (replay: ClockReplayV1): ClockReplayResult => {
   );
   let commandIndex = 0;
   let state = createInitialState(replay.seed, replay.targetNightCount);
-  const events: SimulationEvent[] = [...state.events];
-  const receipts: ReplayCommandReceipt[] = [];
+  const receipts: CommandReceipt[] = [];
 
   while (state.tick < replay.stopAfterTick && !state.isSliceComplete) {
     while (commands[commandIndex]?.atTick === state.tick) {
       const envelope = commands[commandIndex];
       if (envelope === undefined) break;
-      const result = executeSimulationCommand(state, envelope.command);
+      const result = dispatchSimulationCommand(state, envelope);
       state = result.state;
-      receipts.push({
-        ...result.receipt,
-        atTick: envelope.atTick,
-        id: envelope.id,
-        sequence: envelope.sequence,
-      });
+      receipts.push(result.receipt);
       commandIndex += 1;
     }
 
-    const previousEventId = state.events.at(-1)?.id ?? -1;
     const advanced = advanceSimulationStep(state);
     if (advanced === state) break;
-
-    events.push(...advanced.events.filter((event) => event.id > previousEventId));
     state = advanced;
   }
 
   return {
-    events,
+    events: state.eventLedger,
     receipts,
     state,
     stateHash: hashSimulationState(state),

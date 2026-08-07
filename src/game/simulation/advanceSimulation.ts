@@ -2,82 +2,59 @@ import {
   CLOCK_UNITS_PER_MINUTE,
   FIXED_STEP_TIME_UNITS,
   MINUTES_PER_DAY,
+  effectiveTimeMode,
   phaseForClockUnit,
   timeUnitsPerClockUnit,
   wholeMinuteForClockUnit,
 } from './clock';
+import { appendDomainEvent } from './events';
 import type {
+  ResourceChange,
+  ResourceKey,
   Resources,
-  SimulationEvent,
   SimulationPhase,
   SimulationState,
-  TimeMode,
 } from './types';
 
-const MAX_VISIBLE_EVENTS = 8;
+const RESOURCE_ORDER: readonly ResourceKey[] = [
+  'ammunition',
+  'cash',
+  'food',
+  'fuel',
+  'power',
+  'scrap',
+];
 
-const phaseMessage = (
+const resourceRequestsForPhase = (
   phase: SimulationPhase,
-): Omit<SimulationEvent, 'id' | 'minute'> => {
-  switch (phase) {
-    case 'morning':
-      return {
-        code: 'phase-entered-morning',
-        message: 'Sunrise. The night report is ready.',
-        tone: 'positive',
-      };
-    case 'day':
-      return {
-        code: 'phase-entered-day',
-        message: 'Day operations resumed.',
-        tone: 'neutral',
-      };
-    case 'dusk':
-      return {
-        code: 'phase-entered-dusk',
-        message: 'Dusk readiness window opened.',
-        tone: 'warning',
-      };
-    case 'night':
-      return {
-        code: 'phase-entered-night',
-        message: 'Night attack conditions are active.',
-        tone: 'warning',
-      };
-  }
+): Partial<Record<ResourceKey, number>> => {
+  if (phase === 'day') return { cash: 12, food: -1, fuel: -2 };
+  if (phase === 'night') return { ammunition: -1, power: -4 };
+  return {};
 };
 
 const applyHourlyFlow = (
   resources: Readonly<Resources>,
   phase: SimulationPhase,
-): Resources => {
-  if (phase === 'day') {
-    return {
-      ...resources,
-      cash: resources.cash + 12,
-      food: Math.max(0, resources.food - 1),
-      fuel: Math.max(0, resources.fuel - 2),
-    };
+): { changes: readonly ResourceChange[]; resources: Resources } => {
+  const requests = resourceRequestsForPhase(phase);
+  const next: Resources = { ...resources };
+  const changes: ResourceChange[] = [];
+
+  for (const resource of RESOURCE_ORDER) {
+    const requestedDelta = requests[resource] ?? 0;
+    if (requestedDelta === 0) continue;
+
+    const before = resources[resource];
+    const after = Math.max(0, before + requestedDelta);
+    const appliedDelta = after - before;
+    if (appliedDelta === 0) continue;
+
+    next[resource] = after;
+    changes.push({ after, appliedDelta, before, requestedDelta, resource });
   }
 
-  if (phase === 'night') {
-    return {
-      ...resources,
-      ammunition: Math.max(0, resources.ammunition - 1),
-      power: Math.max(0, resources.power - 4),
-    };
-  }
-
-  return { ...resources };
-};
-
-const appendEvent = (
-  events: readonly SimulationEvent[],
-  minute: number,
-  event: Omit<SimulationEvent, 'id' | 'minute'>,
-): readonly SimulationEvent[] => {
-  const nextId = (events.at(-1)?.id ?? -1) + 1;
-  return [...events, { ...event, id: nextId, minute }].slice(-MAX_VISIBLE_EVENTS);
+  return { changes, resources: next };
 };
 
 const assertNonNegativeSafeInteger = (value: number, name: string): void => {
@@ -85,15 +62,6 @@ const assertNonNegativeSafeInteger = (value: number, name: string): void => {
     throw new RangeError(`${name} must be a non-negative safe integer.`);
   }
 };
-
-export const withTimeMode = (
-  state: SimulationState,
-  requestedMode: TimeMode,
-): SimulationState => ({
-  ...state,
-  timeMode:
-    state.phase === 'night' && requestedMode === 'paused' ? 'slow' : requestedMode,
-});
 
 export const advanceSimulationByClockUnits = (
   state: SimulationState,
@@ -121,36 +89,66 @@ export const advanceSimulationByClockUnits = (
     const enteredMorning = previousPhase === 'night' && phase === 'morning';
     const completedNights = next.completedNights + (enteredMorning ? 1 : 0);
     const isSliceComplete = completedNights >= next.targetNightCount;
-    let events = next.events;
-    let resources = next.resources;
-
-    if (phase !== previousPhase) {
-      events = appendEvent(events, absoluteMinute, phaseMessage(phase));
-    }
-
-    if (absoluteMinute % 60 === 0) {
-      resources = applyHourlyFlow(resources, phase);
-    }
-
-    if (isSliceComplete && !next.isSliceComplete) {
-      events = appendEvent(events, absoluteMinute, {
-        code: 'slice-completed',
-        message: `${String(next.targetNightCount)}-night vertical slice complete.`,
-        tone: 'positive',
-      });
-    }
 
     next = {
       ...next,
       absoluteClockUnit,
       completedNights,
-      events,
       isSliceComplete,
       phase,
-      resources,
-      timeMode:
-        phase === 'night' && next.timeMode === 'paused' ? 'slow' : next.timeMode,
     };
+
+    if (phase !== previousPhase) {
+      next = appendDomainEvent(next, {
+        currentPhase: phase,
+        previousPhase,
+        reason: 'clock-boundary',
+        type: 'phase.entered',
+      });
+    }
+
+    if (enteredMorning) {
+      next = appendDomainEvent(next, {
+        completedNights,
+        reason: 'sunrise-reached',
+        type: 'night.completed',
+      });
+    }
+
+    if (isSliceComplete) {
+      next = appendDomainEvent(next, {
+        completedNights,
+        reason: 'target-night-count-reached',
+        targetNightCount: next.targetNightCount,
+        type: 'slice.completed',
+      });
+    }
+
+    if (phase === 'night' && next.timeMode === 'paused') {
+      const previousMode = next.timeMode;
+      next = { ...next, timeMode: 'slow' };
+      next = appendDomainEvent(next, {
+        currentMode: next.timeMode,
+        effectiveCurrentMode: effectiveTimeMode(next.timeMode, phase),
+        effectivePreviousMode: effectiveTimeMode(previousMode, previousPhase),
+        previousMode,
+        reason: 'night-pause-converted',
+        requestedMode: 'paused',
+        type: 'time-mode.changed',
+      });
+    }
+
+    if (absoluteMinute % 60 === 0) {
+      const flow = applyHourlyFlow(next.resources, phase);
+      if (flow.changes.length > 0) {
+        next = { ...next, resources: flow.resources };
+        next = appendDomainEvent(next, {
+          changes: flow.changes,
+          reason: phase === 'day' ? 'day-hourly-flow' : 'night-hourly-flow',
+          type: 'resources.changed',
+        });
+      }
+    }
 
     if (isSliceComplete) break;
   }
@@ -180,7 +178,11 @@ export const advanceSimulationStep = (state: SimulationState): SimulationState =
     throw new RangeError('clock step remainder exceeded the safe integer range.');
   }
 
-  let next: SimulationState = { ...state, clockStepRemainderTimeUnits: 0 };
+  let next: SimulationState = {
+    ...state,
+    clockStepRemainderTimeUnits: 0,
+    tick: state.tick + 1,
+  };
 
   while (!next.isSliceComplete) {
     const unitCost = timeUnitsPerClockUnit(next.timeMode, next.phase);
@@ -193,7 +195,6 @@ export const advanceSimulationStep = (state: SimulationState): SimulationState =
   return {
     ...next,
     clockStepRemainderTimeUnits: next.isSliceComplete ? 0 : remainingTimeUnits,
-    tick: state.tick + 1,
   };
 };
 

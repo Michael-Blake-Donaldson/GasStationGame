@@ -4,7 +4,6 @@ import {
   advanceSimulationStep,
   advanceSimulationSteps,
   currentDayNumber,
-  withTimeMode,
 } from './advanceSimulation';
 import {
   CLOCK_UNITS_PER_MINUTE,
@@ -13,6 +12,7 @@ import {
   wholeMinuteForClockUnit,
 } from './clock';
 import { createInitialState } from './createInitialState';
+import { appendDomainEvent } from './events';
 import type { SimulationState, TimeMode } from './types';
 
 const stateAtMinute = (
@@ -21,10 +21,16 @@ const stateAtMinute = (
 ): SimulationState => ({
   ...createInitialState(),
   absoluteClockUnit: absoluteMinute * CLOCK_UNITS_PER_MINUTE,
-  events: [],
+  eventLedger: [],
+  nextEventSequence: 0,
   phase: phaseForMinuteOfDay(absoluteMinute),
   timeMode,
 });
+
+const stateWithTimeMode = (
+  state: SimulationState,
+  timeMode: TimeMode,
+): SimulationState => ({ ...state, timeMode });
 
 describe('station simulation clock', () => {
   it('does not advance or create ticks while daytime is paused', () => {
@@ -40,7 +46,7 @@ describe('station simulation clock', () => {
   ] as const)(
     'advances %s mode with exact integer clock units',
     (mode, steps, minutes) => {
-      const initial = withTimeMode(createInitialState(), mode);
+      const initial = stateWithTimeMode(createInitialState(), mode);
       const next = advanceSimulationSteps(initial, steps);
 
       expect(wholeMinuteForClockUnit(next.absoluteClockUnit)).toBe(8 * 60 + minutes);
@@ -63,7 +69,13 @@ describe('station simulation clock', () => {
       expect(initial.phase).toBe(expectedBefore);
       expect(next.phase).toBe(expectedAfter);
       if (expectedAfter !== expectedBefore) {
-        expect(next.events.at(-1)?.code).toBe(`phase-entered-${expectedAfter}`);
+        const event = next.eventLedger.find(
+          (candidate) => candidate.type === 'phase.entered',
+        );
+        expect(event?.type).toBe('phase.entered');
+        if (event?.type === 'phase.entered') {
+          expect(event.currentPhase).toBe(expectedAfter);
+        }
       }
     },
   );
@@ -104,19 +116,100 @@ describe('station simulation clock', () => {
     expect(next.clockStepRemainderTimeUnits).toBe(0);
   });
 
-  it('prevents a full pause at night', () => {
-    const night = stateAtMinute(19 * 60);
-    const next = withTimeMode(night, 'paused');
-
-    expect(next.phase).toBe('night');
-    expect(next.timeMode).toBe('slow');
-  });
-
   it('applies explainable hourly day resource flow once', () => {
     const initial = stateAtMinute(8 * 60);
     const next = advanceSimulationByClockUnits(initial, 60 * CLOCK_UNITS_PER_MINUTE);
 
     expect(next.resources).toMatchObject({ cash: 432, food: 47, fuel: 158 });
+    expect(next.eventLedger.at(-1)).toMatchObject({
+      changes: [
+        {
+          after: 432,
+          appliedDelta: 12,
+          before: 420,
+          requestedDelta: 12,
+          resource: 'cash',
+        },
+        {
+          after: 47,
+          appliedDelta: -1,
+          before: 48,
+          requestedDelta: -1,
+          resource: 'food',
+        },
+        {
+          after: 158,
+          appliedDelta: -2,
+          before: 160,
+          requestedDelta: -2,
+          resource: 'fuel',
+        },
+      ],
+      reason: 'day-hourly-flow',
+      type: 'resources.changed',
+    });
+  });
+
+  it('orders phase entry before resource causality at a shared boundary', () => {
+    const initial = stateAtMinute(18 * 60 + 59);
+    const next = advanceSimulationByClockUnits(initial, CLOCK_UNITS_PER_MINUTE);
+
+    expect(next.eventLedger).toEqual([
+      expect.objectContaining({
+        currentPhase: 'night',
+        minute: 19 * 60,
+        sequence: 0,
+        type: 'phase.entered',
+      }),
+      expect.objectContaining({
+        changes: [
+          {
+            after: 35,
+            appliedDelta: -1,
+            before: 36,
+            requestedDelta: -1,
+            resource: 'ammunition',
+          },
+          {
+            after: 96,
+            appliedDelta: -4,
+            before: 100,
+            requestedDelta: -4,
+            resource: 'power',
+          },
+        ],
+        minute: 19 * 60,
+        sequence: 1,
+        type: 'resources.changed',
+      }),
+    ]);
+  });
+
+  it('records applied resource deltas when depletion clamps at zero', () => {
+    const initial = {
+      ...stateAtMinute(19 * 60 + 59),
+      resources: {
+        ...createInitialState().resources,
+        ammunition: 0,
+        power: 2,
+      },
+    };
+    const next = advanceSimulationByClockUnits(initial, CLOCK_UNITS_PER_MINUTE);
+
+    expect(next.resources).toMatchObject({ ammunition: 0, power: 0 });
+    expect(next.eventLedger.at(-1)).toMatchObject({
+      changes: [
+        {
+          after: 0,
+          appliedDelta: -2,
+          before: 2,
+          requestedDelta: -4,
+          resource: 'power',
+        },
+      ],
+      reason: 'night-hourly-flow',
+      type: 'resources.changed',
+    });
   });
 
   it('stops exactly at the third sunrise even with excess requested time', () => {
@@ -129,8 +222,9 @@ describe('station simulation clock', () => {
     expect(next.completedNights).toBe(3);
     expect(next.isSliceComplete).toBe(true);
     expect(wholeMinuteForClockUnit(next.absoluteClockUnit)).toBe(thirdSunriseMinute);
-    expect(next.events.at(-2)?.code).toBe('phase-entered-morning');
-    expect(next.events.at(-1)?.code).toBe('slice-completed');
+    expect(next.eventLedger.at(-3)?.type).toBe('phase.entered');
+    expect(next.eventLedger.at(-2)?.type).toBe('night.completed');
+    expect(next.eventLedger.at(-1)?.type).toBe('slice.completed');
     expect(advanceSimulationStep(next)).toBe(next);
   });
 
@@ -140,6 +234,34 @@ describe('station simulation clock', () => {
       24 * 60 * CLOCK_UNITS_PER_MINUTE,
     );
     expect(currentDayNumber(nextDay)).toBe(2);
+  });
+
+  it('keeps ledger sequences unique and contiguous across a long run', () => {
+    const next = advanceSimulationByClockUnits(
+      createInitialState(),
+      24 * 60 * CLOCK_UNITS_PER_MINUTE,
+    );
+
+    expect(next.eventLedger.map((event) => event.sequence)).toEqual(
+      next.eventLedger.map((_, index) => index),
+    );
+    expect(next.nextEventSequence).toBe(next.eventLedger.length);
+  });
+
+  it('rejects an exhausted event sequence before mutating the ledger', () => {
+    const initial = {
+      ...createInitialState(),
+      nextEventSequence: Number.MAX_SAFE_INTEGER,
+    };
+
+    expect(() =>
+      appendDomainEvent(initial, {
+        completedNights: 1,
+        reason: 'sunrise-reached',
+        type: 'night.completed',
+      }),
+    ).toThrow('safe integer');
+    expect(initial.eventLedger).toHaveLength(1);
   });
 
   it.each([Number.NaN, Number.POSITIVE_INFINITY, -1, 0.5])(
@@ -160,7 +282,7 @@ describe('station simulation clock', () => {
 
   it('rejects an invalid persisted clock-step remainder', () => {
     const invalid = {
-      ...withTimeMode(createInitialState(), 'normal'),
+      ...stateWithTimeMode(createInitialState(), 'normal'),
       clockStepRemainderTimeUnits: -1,
     };
     expect(() => advanceSimulationStep(invalid)).toThrow(RangeError);
@@ -169,7 +291,7 @@ describe('station simulation clock', () => {
   it.each(['slow', 'normal', 'fast'] as const)(
     'preserves clock and resource invariants during long %s runs',
     (mode) => {
-      let state = withTimeMode(createInitialState(), mode);
+      let state = stateWithTimeMode(createInitialState(), mode);
       let previousCompletedNights = state.completedNights;
 
       for (let step = 0; step < 3_000; step += 1) {

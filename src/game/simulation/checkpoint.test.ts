@@ -20,7 +20,7 @@ describe('simulation checkpoint hash', () => {
     expect(hashSimulationState(changed)).not.toBe(hashSimulationState(initial));
   });
 
-  it('includes employee names, event copy, and clock-step remainder', () => {
+  it('includes employee names, event payloads, and clock-step remainder', () => {
     const initial = createInitialState();
     const renamed = {
       ...initial,
@@ -28,14 +28,18 @@ describe('simulation checkpoint hash', () => {
         employee.id === 'employee-ada' ? { ...employee, name: 'Ada Two' } : employee,
       ),
     };
-    const reworded = {
+    const changedEvent = {
       ...initial,
-      events: initial.events.map((event) => ({ ...event, message: 'Changed copy.' })),
+      eventLedger: initial.eventLedger.map((event) =>
+        event.type === 'simulation.started'
+          ? { ...event, targetNightCount: event.targetNightCount + 1 }
+          : event,
+      ),
     };
     const partialStep = { ...initial, clockStepRemainderTimeUnits: 1 };
 
     expect(hashSimulationState(renamed)).not.toBe(hashSimulationState(initial));
-    expect(hashSimulationState(reworded)).not.toBe(hashSimulationState(initial));
+    expect(hashSimulationState(changedEvent)).not.toBe(hashSimulationState(initial));
     expect(hashSimulationState(partialStep)).not.toBe(hashSimulationState(initial));
   });
 });

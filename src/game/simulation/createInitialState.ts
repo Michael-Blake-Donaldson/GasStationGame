@@ -12,8 +12,10 @@ export const createInitialState = (
     throw new RangeError('targetNightCount must be a positive safe integer.');
   }
 
+  const absoluteClockUnit = 8 * 60 * CLOCK_UNITS_PER_MINUTE;
+
   return {
-    absoluteClockUnit: 8 * 60 * CLOCK_UNITS_PER_MINUTE,
+    absoluteClockUnit,
     clockStepRemainderTimeUnits: 0,
     completedNights: 0,
     employees: [
@@ -40,16 +42,20 @@ export const createInitialState = (
         relationship: 4,
       },
     ],
-    events: [
+    eventLedger: [
       {
-        code: 'scenario-started',
-        id: 0,
+        absoluteClockUnit,
         minute: 8 * 60,
-        message: 'Morning shift opened. The Beacon is stable.',
-        tone: 'positive',
+        reason: 'scenario-initialized',
+        seed,
+        sequence: 0,
+        targetNightCount,
+        tick: 0,
+        type: 'simulation.started',
       },
     ],
     isSliceComplete: false,
+    nextEventSequence: 1,
     phase: 'day',
     resources: {
       ammunition: 36,

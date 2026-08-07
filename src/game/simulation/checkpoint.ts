@@ -1,6 +1,6 @@
 import type { SimulationState } from './types';
 
-export const SIMULATION_CHECKPOINT_VERSION = 1;
+export const SIMULATION_CHECKPOINT_VERSION = 2;
 
 export const createSimulationCheckpoint = (state: SimulationState) => ({
   version: SIMULATION_CHECKPOINT_VERSION,
@@ -16,14 +16,9 @@ export const createSimulationCheckpoint = (state: SimulationState) => ({
       relationship: employee.relationship,
       role: employee.role,
     })),
-  events: state.events.map((event) => ({
-    code: event.code,
-    id: event.id,
-    message: event.message,
-    minute: event.minute,
-    tone: event.tone,
-  })),
+  eventLedger: state.eventLedger,
   isSliceComplete: state.isSliceComplete,
+  nextEventSequence: state.nextEventSequence,
   phase: state.phase,
   resources: {
     ammunition: state.resources.ammunition,
@@ -39,6 +34,25 @@ export const createSimulationCheckpoint = (state: SimulationState) => ({
   timeMode: state.timeMode,
 });
 
+const canonicalize = (value: unknown): unknown => {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value))
+      throw new RangeError('Cannot hash non-finite numbers.');
+    return value;
+  }
+  if (Array.isArray(value)) return value.map((item) => canonicalize(item));
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).sort(
+      ([left], [right]) => (left < right ? -1 : left > right ? 1 : 0),
+    );
+    return Object.fromEntries(entries.map(([key, item]) => [key, canonicalize(item)]));
+  }
+  throw new RangeError(`Cannot hash value of type ${typeof value}.`);
+};
+
 const fnv1a = (value: string): string => {
   let hash = 0x811c9dc5;
 
@@ -51,4 +65,4 @@ const fnv1a = (value: string): string => {
 };
 
 export const hashSimulationState = (state: SimulationState): string =>
-  fnv1a(JSON.stringify(createSimulationCheckpoint(state)));
+  fnv1a(JSON.stringify(canonicalize(createSimulationCheckpoint(state))));

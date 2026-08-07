@@ -10,14 +10,14 @@ Last updated: 2026-08-06
 - **Status:** Open
 - **Symptoms:** Crew assignment, power allocation, camera help, threat tags, and station objects appear but are not connected to gameplay commands.
 - **Impact:** The screen must not be described as a playable slice.
-- **Plan:** GS-011 through GS-035 connect commands, grid, jobs, power, combat, and reports.
+- **Plan:** GS-013 through GS-035 connect grid, jobs, power, combat, and reports through the GS-011 command/event foundation.
 
 ### KI-002 — Simulation clock is not yet a replay-grade fixed-step engine
 
 - **Severity:** High
 - **Status:** Resolved 2026-08-06
 - **Resolution:** GS-010 replaced floating minute/UI cadence stepping with integer clock units, a fixed 100 ms active step, a debt-preserving browser accumulator, typed time commands, a clock replay fixture, and deterministic checkpoint hashing. Boundary, cadence-partition, long-run invariant, invalid-input, and exact-completion tests pass.
-- **Remaining boundary:** Scenario RNG and the general command/event ledger remain GS-011/012 work rather than clock defects.
+- **Remaining boundary:** Serializable scenario RNG and scenario-level replay remain GS-012 work rather than clock defects.
 
 ### KI-003 — Save/load and recovery are not implemented
 
@@ -69,10 +69,9 @@ Last updated: 2026-08-06
 ### KI-009 — Replay and event history are clock-only
 
 - **Severity:** High / P0 roadmap gap
-- **Status:** Open
-- **Symptoms:** The GS-010 replay fixture accepts only time-mode commands. The UI keeps a bounded eight-event projection, while the replay result can collect the complete clock-event sequence for its run.
-- **Impact:** Gameplay commands, rejection causes, resource reasons, save recovery, and morning-report reconciliation cannot yet use an authoritative ledger.
-- **Plan:** GS-011 introduces the general typed command and reason-coded event bus; GS-012 adds seeded scenario replay and stronger equality fixtures; GS-035 derives reports from that ledger.
+- **Status:** Resolved 2026-08-06
+- **Resolution:** GS-011 replaced the bounded authoritative log with a complete active-scenario ledger of typed, ordered, reason-coded events. UI copy and the recent-eight projection are non-authoritative. Resource deltas retain causal values, commands return correlated acceptance/rejection receipts, checkpoint version 2 hashes the full ledger, and replay reads it directly.
+- **Remaining boundary:** The only current command payload is `time-mode.set`; GS-012 adds serializable RNG and scenario replay, later systems add their command/event variants, GS-015 defines persistence/retention, and GS-035 derives morning reports from the ledger.
 
 ## Product and design risks
 

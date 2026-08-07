@@ -15,7 +15,7 @@ This backlog implements the GDD milestone sequence. Priority is strict: finish a
 ## M1 — Simulation skeleton
 
 - [x] **GS-010 (P0): Implement fixed-tick phase clock.** Acceptance: the integer 100 ms clock kernel preserves exact phase/resource boundaries, daytime pause, the nighttime slow-time floor and fast-time cap, and exact three-night completion; the browser accumulator is independent of callback cadence and retains capped catch-up debt; typed time commands, replay receipts, deterministic checkpoint hashes, and boundary/property tests pass.
-- [ ] **GS-011 (P0): Add typed command and domain-event buses.** Acceptance: UI submits typed commands; every authoritative change emits ordered, reason-coded events; rejected commands explain why.
+- [x] **GS-011 (P0): Add typed command and domain-event buses.** Acceptance: UI submits typed commands; every authoritative change emits ordered, reason-coded events; rejected commands explain why.
 - [ ] **GS-012 (P0): Add seeded RNG and replay harness.** Acceptance: RNG state is serializable; identical seed plus command stream yields identical state hash and event ledger across repeated runs.
 - [ ] **GS-013 (P0): Implement station grid and occupancy.** Acceptance: authored facility plots and flexible-placement cells share deterministic coordinates; occupancy queries have unit/property coverage.
 - [ ] **GS-014 (P0): Implement deterministic employee movement and job assignment.** Acceptance: four employees can accept, travel to, perform, cancel, and complete jobs; unreachable work is rejected with a cause.

@@ -60,3 +60,11 @@ Decisions are append-only. To change one, add a new decision that supersedes it 
 - **Context:** Floating minute accumulation and one-second UI callbacks could produce drift, lose delayed time, apply one phase's speed across another phase, and continue beyond the third sunrise.
 - **Decision:** Authoritative time uses 40 integer clock units per simulation minute. Active simulation advances in fixed 100,000-microsecond engine steps: 3 units at slow speed, 12 at normal speed, and 48 at daytime fast speed. Night fast is effectively normal; night pause requests canonicalize to slow. The platform adapter owns elapsed-time debt and timestamps, never the simulation.
 - **Consequences:** Callback partitions converge to identical state, phase/hour boundaries remain exact, and replay commands can target stable ticks. Paused or hidden wall time creates no catch-up debt. Presentation interpolation and broader commands/events remain separate work.
+
+## DEC-008 — Keep a complete typed active-scenario event ledger
+
+- **Date:** 2026-08-06
+- **Status:** Accepted
+- **Context:** Replay, morning reports, and failure explanations cannot depend on a bounded UI log or player-facing prose. Commands also need deterministic acceptance and rejection outcomes.
+- **Decision:** Route authoritative player intent through a pure typed command dispatcher. Store every meaningful authoritative transition as an ordered, reason-coded domain event with an explicit safe-integer sequence, fixed tick, and exact clock position. Keep the full ledger for the active scenario; derive the latest eight items and all player-facing copy through presentation selectors. Mechanical tick/clock-unit movement, receipts, rejected/no-op commands, and UI-only state are not domain events.
+- **Consequences:** Checkpoint version 2 hashes typed ledger data rather than localized copy; replay consumes the state ledger directly; resource changes preserve before/requested/applied/after causality. Save retention/compaction remains a GS-015 design concern, and new command/event variants must extend exhaustive dispatch and presentation tests.
