@@ -22,6 +22,7 @@ The architecture must support a deterministic, explainable station simulation; a
 │   │   ├── presentation/    # Domain-event selectors and player-facing copy
 │   │   ├── rendering/       # Three.js projection; no domain authority
 │   │   ├── runtime/         # Browser cadence and typed UI command adapter
+│   │   ├── scenarios/       # Validated content-to-simulation composition
 │   │   └── simulation/      # Pure domain state, clock, and transitions
 │   ├── test/                # Shared test setup
 │   ├── App.tsx              # Current UI/composition root
@@ -75,9 +76,11 @@ The authoritative `eventLedger` is complete for the active scenario and has an i
 
 GS-012 adds project-owned xoshiro128** randomness. Authoritative state retains the original scenario seed plus the current RNG algorithm/version, four uint32 words, and raw draw count. Initialization uses the complete non-negative safe-integer seed, while every draw is pure and returns replacement state. Bounded integer, index, choice, and ratio helpers have fixed draw-consumption rules; modulo bias is avoided through rejection sampling. Simulation lint rejects `Math.random()`. RNG movement is mechanical substrate rather than a domain event; future random outcomes must emit their meaningful resolved facts.
 
-Scenario replay version 1 pins replay kind/version, Great Plains scenario ID/version, RNG algorithm/version/seed, target night count, command stream, and stop tick. It validates the complete envelope before initialization, executes commands by tick and sequence, and reports consumed/unconsumed command IDs, receipts, final RNG, an explicit stop reason, full state, and independent state/ledger diagnostic hashes. Repeated runs compare full state and ledger rather than trusting hashes alone. The GS-010 clock replay remains an explicit compatibility adapter.
+Scenario replay version 2 pins replay kind/version, scenario ID/version, station-grid ID/version, RNG algorithm/version/seed, target night count, command stream, and stop tick. It validates the complete envelope against an injected scenario definition before initialization, executes commands by tick and sequence, and reports consumed/unconsumed command IDs, receipts, final RNG, an explicit stop reason, full state, and independent state/ledger diagnostic hashes. Repeated runs compare full state and ledger rather than trusting hashes alone. The GS-010 clock replay remains an explicit version-1 compatibility adapter.
 
-Checkpoint version 3 includes scenario identity, complete RNG continuation state, the full ledger, and sequence cursor; it canonicalizes object keys, preserves semantic array order, and excludes presentation copy. Checkpoints and replays are deterministic diagnostics, not yet the validated save-file format introduced by GS-015.
+GS-013 adds a zero-based 32×24 station grid whose `x` coordinate increases east and `z` increases south. Row-major numeric indexes, rectangular quarter-turn footprints, authored plot reservations, flexible-build regions, and one exclusive structural occupancy layer are pure domain rules. Authoritative state stores only a grid definition ID/version plus canonically ID-sorted placement facts; cell indexes and expanded footprints are derived. Empty authored plots remain reserved. Great Plains content enters through `game/scenarios` composition, while simulation modules remain independent of region files. Pathfinding, interaction cells, construction mutation, and utility layers are deliberately deferred.
+
+Checkpoint version 4 includes scenario identity, complete RNG continuation state, canonical station occupancy, the full ledger, and sequence cursor; it canonicalizes object keys, preserves semantic array order, and excludes presentation copy. Checkpoints and replays are deterministic diagnostics, not yet the validated save-file format introduced by GS-015.
 
 ## Content model
 

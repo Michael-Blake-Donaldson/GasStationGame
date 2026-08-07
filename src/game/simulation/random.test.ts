@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialState } from './createInitialState';
+import { createInitialState } from '../scenarios/greatPlains';
 import {
   SEEDED_RANDOM_ALGORITHM,
   SEEDED_RANDOM_VERSION,

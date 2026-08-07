@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SimulationState, TimeMode } from './types';
 import { CLOCK_UNITS_PER_MINUTE } from './clock';
-import { createInitialState } from './createInitialState';
+import { createInitialState } from '../scenarios/greatPlains';
 import {
   createFixedStepRunner,
   pumpSimulation,

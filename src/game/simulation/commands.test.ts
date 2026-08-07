@@ -6,7 +6,7 @@ import {
   type SimulationCommand,
 } from './commands';
 import { CLOCK_UNITS_PER_MINUTE } from './clock';
-import { createInitialState } from './createInitialState';
+import { createInitialState } from '../scenarios/greatPlains';
 
 const commandAtCurrentTick = (
   state: ReturnType<typeof createInitialState>,

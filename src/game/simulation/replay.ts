@@ -11,22 +11,22 @@ import {
   SEEDED_RANDOM_VERSION,
   type SeededRandomState,
 } from './random';
-import { GREAT_PLAINS_SCENARIO_ID, GREAT_PLAINS_SCENARIO_VERSION } from './scenario';
+import type { ScenarioDefinition } from './scenario';
 import type { DomainEvent, SimulationState, TimeMode } from './types';
 
-export { GREAT_PLAINS_SCENARIO_ID, GREAT_PLAINS_SCENARIO_VERSION } from './scenario';
-
-export interface ScenarioReplayV1 {
+export interface ScenarioReplayV2 {
   readonly commands: readonly CommandEnvelope[];
+  readonly gridDefinitionId: string;
+  readonly gridDefinitionVersion: number;
   readonly replayKind: 'scenario';
-  readonly replayVersion: 1;
+  readonly replayVersion: 2;
   readonly rng: {
     readonly algorithm: typeof SEEDED_RANDOM_ALGORITHM;
     readonly seed: number;
     readonly version: typeof SEEDED_RANDOM_VERSION;
   };
-  readonly scenarioId: typeof GREAT_PLAINS_SCENARIO_ID;
-  readonly scenarioVersion: typeof GREAT_PLAINS_SCENARIO_VERSION;
+  readonly scenarioId: string;
+  readonly scenarioVersion: number;
   readonly stopAfterTick: number;
   readonly targetNightCount: number;
 }
@@ -130,16 +130,23 @@ const validateCommonFields = (replay: Record<PropertyKey, unknown>): void => {
 
 const validateScenarioReplay: (
   replay: unknown,
-) => asserts replay is ScenarioReplayV1 = (replay) => {
+  scenarioDefinition: ScenarioDefinition,
+) => asserts replay is ScenarioReplayV2 = (replay, scenarioDefinition) => {
   if (!isRecord(replay)) throw new RangeError('Scenario replay must be an object.');
-  if (replay.replayKind !== 'scenario' || replay.replayVersion !== 1) {
+  if (replay.replayKind !== 'scenario' || replay.replayVersion !== 2) {
     throw new RangeError('Unsupported scenario replay format.');
   }
   if (
-    replay.scenarioId !== GREAT_PLAINS_SCENARIO_ID ||
-    replay.scenarioVersion !== GREAT_PLAINS_SCENARIO_VERSION
+    replay.scenarioId !== scenarioDefinition.id ||
+    replay.scenarioVersion !== scenarioDefinition.version
   ) {
     throw new RangeError('Unsupported scenario replay version.');
+  }
+  if (
+    replay.gridDefinitionId !== scenarioDefinition.stationGridDefinition.id ||
+    replay.gridDefinitionVersion !== scenarioDefinition.stationGridDefinition.version
+  ) {
+    throw new RangeError('Unsupported scenario replay grid definition.');
   }
   if (
     !isRecord(replay.rng) ||
@@ -174,12 +181,19 @@ const orderedCommands = (
     (left, right) => left.atTick - right.atTick || left.sequence - right.sequence,
   );
 
-export const runScenarioReplay = (replay: ScenarioReplayV1): ScenarioReplayResult => {
-  validateScenarioReplay(replay);
+export const runScenarioReplay = (
+  replay: ScenarioReplayV2,
+  scenarioDefinition: ScenarioDefinition,
+): ScenarioReplayResult => {
+  validateScenarioReplay(replay, scenarioDefinition);
 
   const commands = orderedCommands(replay.commands);
   let commandIndex = 0;
-  let state = createInitialState(replay.rng.seed, replay.targetNightCount);
+  let state = createInitialState(
+    scenarioDefinition,
+    replay.rng.seed,
+    replay.targetNightCount,
+  );
   const receipts: CommandReceipt[] = [];
 
   while (state.tick < replay.stopAfterTick && !state.isSliceComplete) {
@@ -223,21 +237,29 @@ export const runScenarioReplay = (replay: ScenarioReplayV1): ScenarioReplayResul
   };
 };
 
-export const runClockReplay = (replay: ClockReplayV1): ClockReplayResult => {
+export const runClockReplay = (
+  replay: ClockReplayV1,
+  scenarioDefinition: ScenarioDefinition,
+): ClockReplayResult => {
   validateClockReplay(replay);
-  const result = runScenarioReplay({
-    commands: replay.commands,
-    replayKind: 'scenario',
-    replayVersion: 1,
-    rng: {
-      algorithm: SEEDED_RANDOM_ALGORITHM,
-      seed: replay.seed,
-      version: SEEDED_RANDOM_VERSION,
+  const result = runScenarioReplay(
+    {
+      commands: replay.commands,
+      gridDefinitionId: scenarioDefinition.stationGridDefinition.id,
+      gridDefinitionVersion: scenarioDefinition.stationGridDefinition.version,
+      replayKind: 'scenario',
+      replayVersion: 2,
+      rng: {
+        algorithm: SEEDED_RANDOM_ALGORITHM,
+        seed: replay.seed,
+        version: SEEDED_RANDOM_VERSION,
+      },
+      scenarioId: scenarioDefinition.id,
+      scenarioVersion: scenarioDefinition.version,
+      stopAfterTick: replay.stopAfterTick,
+      targetNightCount: replay.targetNightCount,
     },
-    scenarioId: GREAT_PLAINS_SCENARIO_ID,
-    scenarioVersion: GREAT_PLAINS_SCENARIO_VERSION,
-    stopAfterTick: replay.stopAfterTick,
-    targetNightCount: replay.targetNightCount,
-  });
+    scenarioDefinition,
+  );
   return { ...result, events: result.eventLedger };
 };

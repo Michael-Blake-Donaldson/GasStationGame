@@ -10,7 +10,7 @@ Last updated: 2026-08-07
 - **Status:** Open
 - **Symptoms:** Crew assignment, power allocation, camera help, threat tags, and station objects appear but are not connected to gameplay commands.
 - **Impact:** The screen must not be described as a playable slice.
-- **Plan:** GS-013 through GS-035 connect grid, jobs, power, combat, and reports through the GS-011 command/event foundation.
+- **Plan:** GS-013 established authoritative occupancy; GS-014 through GS-035 connect jobs, movement, power, combat, and reports through the GS-011 command/event foundation.
 
 ### KI-002 — Simulation clock is not yet a replay-grade fixed-step engine
 
@@ -79,6 +79,14 @@ Last updated: 2026-08-07
 - **Status:** Resolved 2026-08-07
 - **Resolution:** GS-017 removed the fixed minimum viewport, introduced deliberate desktop/tablet/mobile composition, raised readable label sizing, extracted the browser simulation runtime from `App`, added semantic meters and grouped pressed-state time controls, and established one accessible dialog/drawer primitive used by the station guide and authoritative event log. Focus containment/return, inert background, Escape, backdrop dismissal, body-scroll restoration, and 320–1920 px layouts are verified.
 - **Remaining boundary:** GS-005 still owns licensed repository typography. GS-018 owns deterministic phase/Beacon visual fixtures and Three.js consistency; GS-054 remains the representative-art gate.
+
+### KI-011 — Authoritative grid is not yet projected into gameplay or rendering
+
+- **Severity:** Expected / P0 roadmap gap
+- **Status:** Open
+- **Symptoms:** Great Plains occupancy is deterministic and replayable, but employees do not navigate it and the procedural station scene is not generated from its cells.
+- **Impact:** Grid state currently proves domain and persistence contracts but does not create player interaction or visible placement feedback.
+- **Plan:** GS-014 adds deterministic movement/jobs; GS-022/023 add construction and path validation. Rendering projection follows the first player-facing grid workflow so placeholder art does not dictate domain geometry.
 
 ## Product and design risks
 

@@ -11,7 +11,7 @@ import {
   phaseForMinuteOfDay,
   wholeMinuteForClockUnit,
 } from './clock';
-import { createInitialState } from './createInitialState';
+import { createInitialState } from '../scenarios/greatPlains';
 import { appendDomainEvent } from './events';
 import type { SimulationState, TimeMode } from './types';
 

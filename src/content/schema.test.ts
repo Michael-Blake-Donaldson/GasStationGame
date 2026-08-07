@@ -1,11 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { greatPlainsRegion } from './regions/greatPlains';
+import { assertStationGridDefinition } from '../game/simulation/grid';
 import { regionSchema } from './schema';
 
 describe('region content schema', () => {
   it('accepts the Great Plains slice definition', () => {
     expect(greatPlainsRegion.id).toBe('great-plains');
     expect(greatPlainsRegion.sliceNightCount).toBe(3);
+    expect(greatPlainsRegion.stationGrid).toMatchObject({
+      height: 24,
+      id: 'great-plains-station-grid',
+      version: 1,
+      width: 32,
+    });
+    expect(() =>
+      assertStationGridDefinition(greatPlainsRegion.stationGrid),
+    ).not.toThrow();
   });
 
   it('rejects invalid technical identifiers', () => {

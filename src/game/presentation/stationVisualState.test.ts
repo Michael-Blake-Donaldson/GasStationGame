@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialState } from '../simulation/createInitialState';
+import { createInitialState } from '../scenarios/greatPlains';
 import { selectStationVisualState } from './stationVisualState';
 
 describe('station visual state', () => {

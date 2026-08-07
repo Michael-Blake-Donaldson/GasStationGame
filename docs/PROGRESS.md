@@ -4,7 +4,7 @@ Last updated: 2026-08-07
 
 ## Current milestone
 
-**M1 — Simulation skeleton:** GS-010 fixed-step time, GS-011 typed commands/events, GS-012 seeded RNG/scenario replay, and GS-017 responsive presentation/modal foundations are verified. Graphics/readability work is active next, followed by grid, jobs, and saves.
+**M1 — Simulation skeleton:** GS-010 fixed-step time, GS-011 typed commands/events, GS-012 seeded RNG/scenario replay, GS-013 station grid/occupancy, and GS-017 responsive presentation/modal foundations are verified. Deterministic employee movement and jobs are next, followed by saves.
 
 The repository has moved from a GDD-only state to a code-first project foundation with its first replay-grade simulation subsystem. The vertical slice is not yet playable.
 
@@ -31,32 +31,35 @@ The repository has moved from a GDD-only state to a code-first project foundatio
 - Verified background inertness, focus containment/return, Escape, reverse/forward Tab wrapping, backdrop dismissal, body scroll restoration, narrow layout ordering, and breakpoint behavior. Browser audits at 1180, 900, 660, and 320 px found no page-level horizontal overflow or visible text below 10 px.
 - Advanced GS-018 with one pure visual-state contract shared by the HUD and Three.js scene, pinned day/dusk/night plus Beacon stable/critical/dark style fixtures, a development-only nine-state browser fixture, and a lightweight Great Plains geometry/readability pass with road marking, prairie bands, pump canopy, windows, and status-aware Beacon light.
 - Reworked the static Three.js scene to retain one renderer across phase/status changes and render only on initialization, resize, or visual-state updates. A mounted lifecycle test verifies renderer/canvas reuse plus observer, geometry, material, renderer, and DOM cleanup.
+- Completed GS-013 with a validated 32×24 Great Plains grid, row-major integer coordinates, quarter-turn rectangular footprints, reserved store/garage plots, fixed pumps and Beacon occupancy, flexible-build checks, and deterministic structured rejection causes.
+- Added canonical JSON-native station occupancy to Great Plains scenario definition v2 state, the self-describing start event, replay envelope v2, checkpoint v4, and state hashing. Great Plains content is injected through a bound scenario-composition module so the simulation core remains independent of region files and rejects replay/grid mismatches.
+- Added semantic definition/state validation for safe numeric indexing, unique technical IDs, bounds, plot compatibility/reservations, overlaps, canonical source ordering, detached snapshots, and malformed persisted occupancy.
 
 ## Verified evidence
 
-| Check                            | Result | Evidence                                                                                                                                                                |
-| -------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GDD preserved                    | Pass   | Git recognizes the byte-identical file move under `docs/`                                                                                                               |
-| Formatting                       | Pass   | `pnpm format:check`                                                                                                                                                     |
-| Lint                             | Pass   | `pnpm lint --max-warnings=0`                                                                                                                                            |
-| Type checking                    | Pass   | `pnpm typecheck`                                                                                                                                                        |
-| Unit tests                       | Pass   | 178/178 tests across 15 files with `pnpm test`, including RNG/replay, modal accessibility, visual-state/style fixtures, renderer lifecycle, and Strict Mode integration |
-| Coverage                         | Pass   | 100% functions, 97.03% lines, 96.36% statements, and 93.88% branches for targeted simulation/content modules                                                            |
-| Browser production build         | Pass   | `pnpm build`; one JS asset, 818.18 kB minified / 219.89 kB gzip                                                                                                         |
-| Desktop manifest/Rust formatting | Pass   | `cargo metadata --no-deps` and `cargo fmt --check`                                                                                                                      |
-| Desktop Rust shell               | Pass   | Rust/Cargo 1.97.1 MSVC; rustfmt, Clippy with denied warnings, Cargo tests, and `cargo check --locked`                                                                   |
-| Declared Rust minimum            | Pass   | Rust/Cargo 1.88.0 MSVC completes `cargo check --locked`; CI verifies this MSRV separately                                                                               |
-| Desktop release executable       | Pass   | `pnpm build:desktop`; optimized Windows executable built and remained healthy in an 8-second WebView2 smoke test                                                        |
-| Local NSIS packaging             | Pass   | `pnpm build:installer`; local x64 installer produced without publishing or installing it                                                                                |
-| Configurable desktop title       | Pass   | A `Prairie Signal` test build embedded that product name and exposed the same live window title                                                                         |
-| Visual smoke review              | Pass   | Responsive matrix plus all nine day/dusk/night × stable/critical/dark station fixtures; one canvas each, no fresh console warnings or horizontal overflow               |
+| Check                            | Result | Evidence                                                                                                                                                                               |
+| -------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GDD preserved                    | Pass   | Git recognizes the byte-identical file move under `docs/`                                                                                                                              |
+| Formatting                       | Pass   | `pnpm format:check`                                                                                                                                                                    |
+| Lint                             | Pass   | `pnpm lint --max-warnings=0`                                                                                                                                                           |
+| Type checking                    | Pass   | `pnpm typecheck`                                                                                                                                                                       |
+| Unit tests                       | Pass   | 196/196 tests across 16 files with `pnpm test`, including grid/occupancy invariants, RNG/replay, modal accessibility, visual fixtures, renderer lifecycle, and Strict Mode integration |
+| Coverage                         | Pass   | 98.38% functions, 93.97% lines, 93.59% statements, and 87.11% branches with `pnpm test:coverage`                                                                                       |
+| Browser production build         | Pass   | `pnpm build`; one JS asset, 825.63 kB minified / 222.16 kB gzip                                                                                                                        |
+| Desktop manifest/Rust formatting | Pass   | `cargo metadata --no-deps` and `cargo fmt --check`                                                                                                                                     |
+| Desktop Rust shell               | Pass   | Rust/Cargo 1.97.1 MSVC; rustfmt, Clippy with denied warnings, Cargo tests, and `cargo check --locked`                                                                                  |
+| Declared Rust minimum            | Pass   | Rust/Cargo 1.88.0 MSVC completes `cargo check --locked`; CI verifies this MSRV separately                                                                                              |
+| Desktop release executable       | Pass   | `pnpm build:desktop`; optimized Windows executable built and remained healthy in an 8-second WebView2 smoke test                                                                       |
+| Local NSIS packaging             | Pass   | `pnpm build:installer`; local x64 installer produced without publishing or installing it                                                                                               |
+| Configurable desktop title       | Pass   | A `Prairie Signal` test build embedded that product name and exposed the same live window title                                                                                        |
+| Visual smoke review              | Pass   | Responsive matrix plus all nine day/dusk/night × stable/critical/dark station fixtures; one canvas each, no fresh console warnings or horizontal overflow                              |
 
 ## Honest capability boundary
 
-The current screen is a presentation and architecture scaffold driven by a real fixed-step phase clock, authoritative event ledger, versioned seeded RNG, and scenario replay harness. Time-mode changes are the only command payload implemented so far, and no gameplay system consumes randomness yet. The crew cards, job button, grid allocation, threat tags, and station geometry are representative placeholders. The repository does **not** yet implement customers, jobs, construction, pathfinding, saves, automatic combat, actual power allocation, traveler dialogue, the signature creature, wind/fire, audio, or the complete three-night scenario.
+The current screen is a presentation and architecture scaffold driven by a real fixed-step phase clock, authoritative event ledger, versioned seeded RNG, scenario replay harness, and deterministic station occupancy. Time-mode changes are the only command payload implemented so far, no gameplay system consumes randomness yet, and the authoritative grid is not projected into the current placeholder scene. The crew cards, job button, threat tags, and station geometry are representative placeholders. The repository does **not** yet implement customers, jobs, construction, pathfinding, saves, automatic combat, actual power allocation, traveler dialogue, the signature creature, wind/fire, audio, or the complete three-night scenario.
 
 ## Next work
 
 1. Add repository-owned, license-documented typography when external asset acquisition is separately authorized (GS-005), completing the remaining GS-018 baseline requirement.
-2. Add station grid/occupancy and deterministic movement (GS-013–014).
-3. Design versioned save/load before simulation state grows (GS-015).
+2. Add deterministic employee movement and job assignment on the authoritative grid (GS-014).
+3. Design versioned save/load before simulation state grows further (GS-015).

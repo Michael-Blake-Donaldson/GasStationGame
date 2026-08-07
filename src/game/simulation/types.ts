@@ -1,4 +1,5 @@
 import type { SeededRandomState } from './random';
+import type { StationOccupancyState } from './grid';
 
 export type SimulationPhase = 'morning' | 'day' | 'dusk' | 'night';
 export type TimeMode = 'paused' | 'slow' | 'normal' | 'fast';
@@ -40,6 +41,8 @@ export interface DomainEventBase {
 export type DomainEvent =
   | (DomainEventBase & {
       reason: 'scenario-initialized';
+      gridDefinitionId: string;
+      gridDefinitionVersion: number;
       rngAlgorithm: SeededRandomState['algorithm'];
       rngVersion: SeededRandomState['version'];
       scenarioId: string;
@@ -92,6 +95,7 @@ export interface SimulationState {
   rng: SeededRandomState;
   scenarioId: string;
   scenarioVersion: number;
+  stationOccupancy: StationOccupancyState;
   resources: Readonly<Resources>;
   seed: number;
   targetNightCount: number;

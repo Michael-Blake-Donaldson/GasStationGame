@@ -92,3 +92,11 @@ Decisions are append-only. To change one, add a new decision that supersedes it 
 - **Context:** HUD and world graphics can contradict each other if phase and Beacon presentation are derived independently, while screenshot testing cannot wait hours of wall time for each state.
 - **Decision:** Derive one pure `StationVisualState` from authoritative simulation phase and power, then pass it to both HUD and Three.js. Pin atmosphere and Beacon styles in pure tests and expose their nine combinations through a development-only query fixture. Retain one static renderer and redraw on initialization, resize, or visual-state changes instead of using a perpetual animation loop.
 - **Consequences:** Visual fixtures are deterministic and do not mutate or bypass simulation. Dark means zero Beacon point light and emissive output in every atmosphere. Future animated systems may add rendering cadence without changing authority, and production builds must exclude the fixture route. Repository-owned typography remains GS-005 before cross-machine pixel baselines are stable.
+
+## DEC-012 — Represent the station as authored reservations plus canonical occupancy
+
+- **Date:** 2026-08-07
+- **Status:** Accepted
+- **Context:** The GDD combines authored major-building plots with flexible utilities and defenses. Movement, construction, saves, and later path validation need one deterministic spatial contract without making rendering authoritative.
+- **Decision:** Use zero-based integer `{x, z}` cells with row-major indexes and quarter-turn rectangular footprints. Content defines grid dimensions, flexible-build rectangles, reserved authored plots, and fixed/initial occupants. Simulation state stores only the grid definition ID/version and ID-sorted placement facts; expanded cells and lookup maps are derived. Empty authored plots remain reserved, and one structural occupant may own a cell in GS-013.
+- **Consequences:** Scenario composition binds and injects validated Great Plains identity plus content into the pure simulation core. Great Plains scenario definition version 2, replay envelope version 2, and checkpoint version 4 identify and hash grid occupancy. Construction commands, interaction cells, navigation, utilities, and layered overlap remain separate decisions and backlog items.

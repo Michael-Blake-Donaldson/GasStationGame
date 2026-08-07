@@ -4,5 +4,64 @@
   "identity": ["Tall grass", "Grain silos", "Endless sky", "Distant livestock"],
   "pressures": ["High wind", "Grass fire", "Stampede risk", "Moving horizon lights"],
   "startingThreats": ["Hollow Walkers", "Headlight Men", "Unknown signature creature"],
-  "sliceNightCount": 3
+  "sliceNightCount": 3,
+  "stationGrid": {
+    "id": "great-plains-station-grid",
+    "version": 1,
+    "width": 32,
+    "height": 24,
+    "cellSizeMeters": 2,
+    "flexibleBuildAreas": [
+      {
+        "origin": { "x": 0, "z": 4 },
+        "footprint": { "width": 32, "height": 20 }
+      }
+    ],
+    "authoredPlots": [
+      {
+        "id": "main-store-plot",
+        "origin": { "x": 8, "z": 11 },
+        "footprint": { "width": 8, "height": 6 },
+        "rotation": 0,
+        "allowedFacilityIds": ["facility-main-store"]
+      },
+      {
+        "id": "garage-plot",
+        "origin": { "x": 21, "z": 11 },
+        "footprint": { "width": 7, "height": 6 },
+        "rotation": 0,
+        "allowedFacilityIds": ["facility-garage"]
+      }
+    ],
+    "initialFixedOccupants": [
+      {
+        "id": "pump-island-west",
+        "structureId": "fuel-pump-island",
+        "origin": { "x": 9, "z": 6 },
+        "footprint": { "width": 2, "height": 2 },
+        "rotation": 0
+      },
+      {
+        "id": "pump-island-east",
+        "structureId": "fuel-pump-island",
+        "origin": { "x": 14, "z": 6 },
+        "footprint": { "width": 2, "height": 2 },
+        "rotation": 0
+      },
+      {
+        "id": "beacon-sign",
+        "structureId": "beacon-sign",
+        "origin": { "x": 3, "z": 6 },
+        "footprint": { "width": 1, "height": 1 },
+        "rotation": 0
+      }
+    ],
+    "initialAuthoredOccupants": [
+      {
+        "id": "main-store",
+        "facilityId": "facility-main-store",
+        "plotId": "main-store-plot"
+      }
+    ]
+  }
 }

@@ -1,15 +1,26 @@
 import { assertSeededRandomState } from './random';
+import { assertStationOccupancySnapshot, type PlacedOccupant } from './grid';
 import type { DomainEvent, SimulationState } from './types';
 
-export const SIMULATION_CHECKPOINT_VERSION = 3;
+export const SIMULATION_CHECKPOINT_VERSION = 4;
 
 const cloneDomainEvent = (event: DomainEvent): DomainEvent =>
   event.type === 'resources.changed'
     ? { ...event, changes: event.changes.map((change) => ({ ...change })) }
     : { ...event };
 
+const clonePlacedOccupant = (occupant: PlacedOccupant): PlacedOccupant =>
+  occupant.placement === 'authored-plot'
+    ? { ...occupant }
+    : {
+        ...occupant,
+        footprint: { ...occupant.footprint },
+        origin: { ...occupant.origin },
+      };
+
 export const createSimulationCheckpoint = (state: SimulationState) => {
   assertSeededRandomState(state.rng);
+  assertStationOccupancySnapshot(state.stationOccupancy);
 
   return {
     version: SIMULATION_CHECKPOINT_VERSION,
@@ -37,6 +48,13 @@ export const createSimulationCheckpoint = (state: SimulationState) => {
     },
     scenarioId: state.scenarioId,
     scenarioVersion: state.scenarioVersion,
+    stationOccupancy: {
+      gridDefinitionId: state.stationOccupancy.gridDefinitionId,
+      gridDefinitionVersion: state.stationOccupancy.gridDefinitionVersion,
+      occupants: [...state.stationOccupancy.occupants]
+        .sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0))
+        .map((occupant) => clonePlacedOccupant(occupant)),
+    },
     resources: {
       ammunition: state.resources.ammunition,
       cash: state.resources.cash,

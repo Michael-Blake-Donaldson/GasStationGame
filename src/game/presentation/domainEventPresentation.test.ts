@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { advanceSimulationByClockUnits } from '../simulation/advanceSimulation';
 import { CLOCK_UNITS_PER_MINUTE } from '../simulation/clock';
-import { createInitialState } from '../simulation/createInitialState';
+import { createInitialState } from '../scenarios/greatPlains';
 import {
   presentCommandReceipt,
   presentDomainEvent,

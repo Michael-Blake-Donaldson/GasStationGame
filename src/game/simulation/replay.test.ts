@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { dispatchSimulationCommand } from './commands';
-import { createInitialState } from './createInitialState';
 import {
+  createInitialState,
   GREAT_PLAINS_SCENARIO_ID,
   GREAT_PLAINS_SCENARIO_VERSION,
   runClockReplay,
   runScenarioReplay,
   type ClockReplayV1,
-  type ScenarioReplayV1,
-} from './replay';
+  type ScenarioReplayV2,
+} from '../scenarios/greatPlains';
 import { SEEDED_RANDOM_ALGORITHM, SEEDED_RANDOM_VERSION } from './random';
 
 const replayFixture = (): ClockReplayV1 => ({
@@ -32,10 +32,12 @@ const replayFixture = (): ClockReplayV1 => ({
   targetNightCount: 3,
 });
 
-const scenarioReplayFixture = (): ScenarioReplayV1 => ({
+const scenarioReplayFixture = (): ScenarioReplayV2 => ({
   commands: replayFixture().commands,
+  gridDefinitionId: 'great-plains-station-grid',
+  gridDefinitionVersion: 1,
   replayKind: 'scenario',
-  replayVersion: 1,
+  replayVersion: 2,
   rng: {
     algorithm: SEEDED_RANDOM_ALGORITHM,
     seed: 1987,
@@ -91,6 +93,8 @@ describe('clock commands and replay', () => {
     expect(first.finalRng).toBe(first.state.rng);
     expect(first.finalRng.drawCount).toBe(0);
     expect(first.eventLedger[0]).toMatchObject({
+      gridDefinitionId: 'great-plains-station-grid',
+      gridDefinitionVersion: 1,
       rngAlgorithm: SEEDED_RANDOM_ALGORITHM,
       rngVersion: SEEDED_RANDOM_VERSION,
       type: 'simulation.started',
@@ -132,7 +136,9 @@ describe('clock commands and replay', () => {
   it.each([
     [{ replayKind: 'clock' }, 'format'],
     [{ scenarioId: 'unknown' }, 'scenario'],
-    [{ scenarioVersion: 2 }, 'scenario'],
+    [{ scenarioVersion: 1 }, 'scenario'],
+    [{ gridDefinitionId: 'unknown-grid' }, 'grid'],
+    [{ gridDefinitionVersion: 2 }, 'grid'],
     [{ rng: { ...scenarioReplayFixture().rng, algorithm: 'unknown' } }, 'RNG'],
     [{ rng: { ...scenarioReplayFixture().rng, version: 2 } }, 'RNG'],
     [{ rng: { ...scenarioReplayFixture().rng, seed: -1 } }, 'rng.seed'],
@@ -142,7 +148,7 @@ describe('clock commands and replay', () => {
       const invalid = {
         ...scenarioReplayFixture(),
         ...override,
-      } as unknown as ScenarioReplayV1;
+      } as unknown as ScenarioReplayV2;
       expect(() => runScenarioReplay(invalid)).toThrow(message);
     },
   );

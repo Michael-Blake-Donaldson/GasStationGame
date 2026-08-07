@@ -6,23 +6,27 @@ import {
   hashDomainEventLedger,
   hashSimulationState,
 } from './checkpoint';
-import { createInitialState } from './createInitialState';
+import { createInitialState } from '../scenarios/greatPlains';
 import { CLOCK_UNITS_PER_MINUTE } from './clock';
 import { drawSimulationRandomInteger } from './random';
 import type { ResourceChange } from './types';
 
 describe('simulation checkpoint hash', () => {
-  it('serializes checkpoint version 3 with exact RNG continuation state', () => {
+  it('serializes checkpoint version 4 with exact RNG and station state', () => {
     const initial = createInitialState();
     const advanced = drawSimulationRandomInteger(initial, 0, 10).state;
     const checkpoint = createSimulationCheckpoint(advanced);
     const restored: unknown = JSON.parse(JSON.stringify(checkpoint));
 
-    expect(SIMULATION_CHECKPOINT_VERSION).toBe(3);
+    expect(SIMULATION_CHECKPOINT_VERSION).toBe(4);
     expect(checkpoint.rng).toEqual(advanced.rng);
     expect(checkpoint).toMatchObject({
       scenarioId: 'great-plains',
-      scenarioVersion: 1,
+      scenarioVersion: 2,
+      stationOccupancy: {
+        gridDefinitionId: 'great-plains-station-grid',
+        gridDefinitionVersion: 1,
+      },
     });
     expect(restored).toEqual(checkpoint);
   });
@@ -32,6 +36,53 @@ describe('simulation checkpoint hash', () => {
     const reordered = { ...initial, employees: [...initial.employees].reverse() };
 
     expect(hashSimulationState(reordered)).toBe(hashSimulationState(initial));
+  });
+
+  it('is stable when ID-keyed station occupants arrive in a different order', () => {
+    const initial = createInitialState();
+    const reordered = {
+      ...initial,
+      stationOccupancy: {
+        ...initial.stationOccupancy,
+        occupants: [...initial.stationOccupancy.occupants].reverse(),
+      },
+    };
+
+    expect(hashSimulationState(reordered)).toBe(hashSimulationState(initial));
+  });
+
+  it('changes when authoritative station occupancy changes', () => {
+    const initial = createInitialState();
+    const changed = {
+      ...initial,
+      stationOccupancy: {
+        ...initial.stationOccupancy,
+        occupants: initial.stationOccupancy.occupants.slice(1),
+      },
+    };
+
+    expect(hashSimulationState(changed)).not.toBe(hashSimulationState(initial));
+  });
+
+  it('creates a station occupancy snapshot detached from nested state', () => {
+    const initial = createInitialState();
+    const checkpoint = createSimulationCheckpoint(initial);
+    const checkpointOccupant = checkpoint.stationOccupancy.occupants.find(
+      (occupant) => occupant.placement === 'fixed',
+    );
+    const stateOccupant = initial.stationOccupancy.occupants.find(
+      (occupant) => occupant.placement === 'fixed',
+    );
+    if (
+      checkpointOccupant?.placement !== 'fixed' ||
+      stateOccupant?.placement !== 'fixed'
+    ) {
+      throw new Error('Expected fixed station occupants are missing.');
+    }
+
+    (checkpointOccupant.origin as { x: number }).x = 100;
+
+    expect(checkpointOccupant.origin).not.toEqual(stateOccupant.origin);
   });
 
   it('changes when authoritative resources change', () => {
@@ -115,6 +166,21 @@ describe('simulation checkpoint hash', () => {
     };
 
     expect(() => createSimulationCheckpoint(invalid)).toThrow('all zero');
+  });
+
+  it('rejects duplicate station occupant identities before checkpointing', () => {
+    const initial = createInitialState();
+    const firstOccupant = initial.stationOccupancy.occupants[0];
+    if (firstOccupant === undefined) throw new Error('Expected an occupant fixture.');
+    const invalid = {
+      ...initial,
+      stationOccupancy: {
+        ...initial.stationOccupancy,
+        occupants: [...initial.stationOccupancy.occupants, firstOccupant],
+      },
+    };
+
+    expect(() => createSimulationCheckpoint(invalid)).toThrow(/duplicate ID/u);
   });
 
   it('includes employee names, event payloads, and clock-step remainder', () => {
