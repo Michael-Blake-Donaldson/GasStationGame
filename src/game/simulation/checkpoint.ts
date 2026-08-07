@@ -1,13 +1,47 @@
 import { assertSeededRandomState } from './random';
 import { assertStationOccupancySnapshot, type PlacedOccupant } from './grid';
-import type { DomainEvent, SimulationState } from './types';
+import { assertWorkforceState } from './jobs';
+import type { SimulationContext } from './scenario';
+import type { DomainEvent, Employee, SimulationState } from './types';
 
-export const SIMULATION_CHECKPOINT_VERSION = 4;
+export const SIMULATION_CHECKPOINT_VERSION = 5;
 
-const cloneDomainEvent = (event: DomainEvent): DomainEvent =>
-  event.type === 'resources.changed'
-    ? { ...event, changes: event.changes.map((change) => ({ ...change })) }
-    : { ...event };
+const cloneDomainEvent = (event: DomainEvent): DomainEvent => {
+  switch (event.type) {
+    case 'resources.changed':
+      return { ...event, changes: event.changes.map((change) => ({ ...change })) };
+    case 'job.assigned':
+    case 'employee.arrived':
+      return { ...event, destination: { ...event.destination } };
+    case 'job.cancelled':
+    case 'job.completed':
+      return { ...event, position: { ...event.position } };
+    default:
+      return { ...event };
+  }
+};
+
+const cloneEmployee = (employee: Employee): Employee => ({
+  activity:
+    employee.activity.status === 'idle'
+      ? { status: 'idle' }
+      : employee.activity.status === 'traveling'
+        ? {
+            ...employee.activity,
+            destination: { ...employee.activity.destination },
+            path: employee.activity.path.map((cell) => ({ ...cell })),
+          }
+        : {
+            ...employee.activity,
+            destination: { ...employee.activity.destination },
+          },
+  fatigue: employee.fatigue,
+  id: employee.id,
+  name: employee.name,
+  position: { ...employee.position },
+  relationship: employee.relationship,
+  role: employee.role,
+});
 
 const clonePlacedOccupant = (occupant: PlacedOccupant): PlacedOccupant =>
   occupant.placement === 'authored-plot'
@@ -18,9 +52,13 @@ const clonePlacedOccupant = (occupant: PlacedOccupant): PlacedOccupant =>
         origin: { ...occupant.origin },
       };
 
-export const createSimulationCheckpoint = (state: SimulationState) => {
+export const createSimulationCheckpoint = (
+  state: SimulationState,
+  context: SimulationContext,
+) => {
   assertSeededRandomState(state.rng);
   assertStationOccupancySnapshot(state.stationOccupancy);
+  assertWorkforceState(context, state);
 
   return {
     version: SIMULATION_CHECKPOINT_VERSION,
@@ -29,13 +67,7 @@ export const createSimulationCheckpoint = (state: SimulationState) => {
     completedNights: state.completedNights,
     employees: [...state.employees]
       .sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0))
-      .map((employee) => ({
-        id: employee.id,
-        fatigue: employee.fatigue,
-        name: employee.name,
-        relationship: employee.relationship,
-        role: employee.role,
-      })),
+      .map((employee) => cloneEmployee(employee)),
     eventLedger: state.eventLedger.map((event) => cloneDomainEvent(event)),
     isSliceComplete: state.isSliceComplete,
     nextEventSequence: state.nextEventSequence,
@@ -100,8 +132,11 @@ const fnv1a = (value: string): string => {
   return (hash >>> 0).toString(16).padStart(8, '0');
 };
 
-export const hashSimulationState = (state: SimulationState): string =>
-  fnv1a(JSON.stringify(canonicalize(createSimulationCheckpoint(state))));
+export const hashSimulationState = (
+  state: SimulationState,
+  context: SimulationContext,
+): string =>
+  fnv1a(JSON.stringify(canonicalize(createSimulationCheckpoint(state, context))));
 
 export const hashDomainEventLedger = (eventLedger: readonly DomainEvent[]): string =>
   fnv1a(JSON.stringify(canonicalize(eventLedger)));

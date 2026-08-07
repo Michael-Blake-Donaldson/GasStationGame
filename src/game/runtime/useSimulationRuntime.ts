@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { dispatchSimulationCommand, type CommandReceipt } from '../simulation/commands';
-import { createInitialState } from '../scenarios/greatPlains';
+import type { CommandReceipt } from '../simulation/commands';
+import {
+  createInitialState,
+  dispatchSimulationCommand,
+} from '../scenarios/greatPlains';
 import {
   createFixedStepRunner,
   pumpSimulation,

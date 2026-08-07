@@ -8,6 +8,7 @@ import {
   wholeMinuteForClockUnit,
 } from './clock';
 import { appendDomainEvent } from './events';
+import { advanceEmployeeActivitiesByClockUnit } from './jobs';
 import type {
   ResourceChange,
   ResourceKey,
@@ -79,7 +80,7 @@ export const advanceSimulationByClockUnits = (
     }
 
     if (absoluteClockUnit % CLOCK_UNITS_PER_MINUTE !== 0) {
-      next = { ...next, absoluteClockUnit };
+      next = advanceEmployeeActivitiesByClockUnit({ ...next, absoluteClockUnit });
       continue;
     }
 
@@ -116,6 +117,7 @@ export const advanceSimulationByClockUnits = (
     }
 
     if (isSliceComplete) {
+      next = advanceEmployeeActivitiesByClockUnit(next);
       next = appendDomainEvent(next, {
         completedNights,
         reason: 'target-night-count-reached',
@@ -150,6 +152,7 @@ export const advanceSimulationByClockUnits = (
       }
     }
 
+    if (!isSliceComplete) next = advanceEmployeeActivitiesByClockUnit(next);
     if (isSliceComplete) break;
   }
 

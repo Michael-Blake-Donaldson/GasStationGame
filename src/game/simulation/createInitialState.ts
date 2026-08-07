@@ -1,5 +1,6 @@
 import { CLOCK_UNITS_PER_MINUTE } from './clock';
 import { createStationOccupancyState } from './grid';
+import { assertScenarioDefinition } from './jobs';
 import {
   SEEDED_RANDOM_ALGORITHM,
   SEEDED_RANDOM_VERSION,
@@ -13,15 +14,7 @@ export const createInitialState = (
   seed = 1987,
   targetNightCount = 3,
 ): SimulationState => {
-  if (!/^[a-z0-9-]+$/u.test(scenarioDefinition.id)) {
-    throw new TypeError('scenarioDefinition.id must be a technical ID.');
-  }
-  if (
-    !Number.isSafeInteger(scenarioDefinition.version) ||
-    scenarioDefinition.version < 1
-  ) {
-    throw new RangeError('scenarioDefinition.version must be a positive safe integer.');
-  }
+  assertScenarioDefinition(scenarioDefinition);
   if (!Number.isSafeInteger(seed) || seed < 0) {
     throw new RangeError('seed must be a non-negative safe integer.');
   }
@@ -34,34 +27,58 @@ export const createInitialState = (
     scenarioDefinition.stationGridDefinition,
   );
 
+  const employeeDetails = [
+    {
+      id: 'employee-ada',
+      name: 'Ada',
+      role: 'Checkout',
+      fatigue: 14,
+      relationship: 12,
+    },
+    { id: 'employee-bo', name: 'Bo', role: 'Pumps', fatigue: 21, relationship: 8 },
+    {
+      id: 'employee-cora',
+      name: 'Cora',
+      role: 'Garage',
+      fatigue: 18,
+      relationship: 17,
+    },
+    {
+      id: 'employee-dale',
+      name: 'Dale',
+      role: 'Security',
+      fatigue: 26,
+      relationship: 4,
+    },
+  ] as const;
+  const employeeIds = new Set<string>(employeeDetails.map((employee) => employee.id));
+  if (
+    scenarioDefinition.initialEmployeePositions.length !== employeeDetails.length ||
+    scenarioDefinition.initialEmployeePositions.some(
+      ({ employeeId }) => !employeeIds.has(employeeId),
+    )
+  ) {
+    throw new RangeError('Scenario must position each initial employee exactly once.');
+  }
+  const employees = employeeDetails.map((employee) => {
+    const initialPosition = scenarioDefinition.initialEmployeePositions.find(
+      ({ employeeId }) => employeeId === employee.id,
+    );
+    if (initialPosition === undefined) {
+      throw new RangeError(`Scenario is missing a position for ${employee.id}.`);
+    }
+    return {
+      ...employee,
+      activity: { status: 'idle' as const },
+      position: { ...initialPosition.position },
+    };
+  });
+
   return {
     absoluteClockUnit,
     clockStepRemainderTimeUnits: 0,
     completedNights: 0,
-    employees: [
-      {
-        id: 'employee-ada',
-        name: 'Ada',
-        role: 'Checkout',
-        fatigue: 14,
-        relationship: 12,
-      },
-      { id: 'employee-bo', name: 'Bo', role: 'Pumps', fatigue: 21, relationship: 8 },
-      {
-        id: 'employee-cora',
-        name: 'Cora',
-        role: 'Garage',
-        fatigue: 18,
-        relationship: 17,
-      },
-      {
-        id: 'employee-dale',
-        name: 'Dale',
-        role: 'Security',
-        fatigue: 26,
-        relationship: 4,
-      },
-    ],
+    employees,
     eventLedger: [
       {
         absoluteClockUnit,

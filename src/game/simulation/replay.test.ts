@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { dispatchSimulationCommand } from './commands';
 import {
   createInitialState,
+  dispatchSimulationCommand,
   GREAT_PLAINS_SCENARIO_ID,
   GREAT_PLAINS_SCENARIO_VERSION,
   runClockReplay,
   runScenarioReplay,
   type ClockReplayV1,
-  type ScenarioReplayV2,
+  type ScenarioReplayV3,
 } from '../scenarios/greatPlains';
 import { SEEDED_RANDOM_ALGORITHM, SEEDED_RANDOM_VERSION } from './random';
 
@@ -32,12 +32,12 @@ const replayFixture = (): ClockReplayV1 => ({
   targetNightCount: 3,
 });
 
-const scenarioReplayFixture = (): ScenarioReplayV2 => ({
+const scenarioReplayFixture = (): ScenarioReplayV3 => ({
   commands: replayFixture().commands,
   gridDefinitionId: 'great-plains-station-grid',
   gridDefinitionVersion: 1,
   replayKind: 'scenario',
-  replayVersion: 2,
+  replayVersion: 3,
   rng: {
     algorithm: SEEDED_RANDOM_ALGORITHM,
     seed: 1987,
@@ -104,6 +104,49 @@ describe('clock commands and replay', () => {
     expect(first.stopReason).toBe('tick-limit-reached');
   });
 
+  it('replays job assignment through travel, work, and completion', () => {
+    const result = runScenarioReplay({
+      ...scenarioReplayFixture(),
+      commands: [
+        {
+          atTick: 0,
+          command: {
+            employeeId: 'employee-ada',
+            jobId: 'open-checkout',
+            type: 'job.assign',
+          },
+          id: 'assign-ada',
+          sequence: 0,
+        },
+        {
+          atTick: 0,
+          command: { mode: 'normal', type: 'time-mode.set' },
+          id: 'start-clock',
+          sequence: 1,
+        },
+      ],
+      stopAfterTick: 20,
+    });
+
+    expect(result.receipts.map(({ reason }) => reason)).toEqual([
+      'job-assigned',
+      'time-mode-updated',
+    ]);
+    expect(
+      result.eventLedger
+        .filter(({ type }) =>
+          ['job.assigned', 'employee.arrived', 'job.started', 'job.completed'].includes(
+            type,
+          ),
+        )
+        .map(({ type }) => type),
+    ).toEqual(['job.assigned', 'employee.arrived', 'job.started', 'job.completed']);
+    expect(
+      result.state.employees.find(({ id }) => id === 'employee-ada')?.activity,
+    ).toEqual({ status: 'idle' });
+    expect(result.finalRng.drawCount).toBe(0);
+  });
+
   it('changes RNG, state, ledger, and diagnostic hashes when the seed changes', () => {
     const baseline = runScenarioReplay(scenarioReplayFixture());
     const changed = runScenarioReplay({
@@ -135,6 +178,7 @@ describe('clock commands and replay', () => {
 
   it.each([
     [{ replayKind: 'clock' }, 'format'],
+    [{ replayVersion: 2 }, 'format'],
     [{ scenarioId: 'unknown' }, 'scenario'],
     [{ scenarioVersion: 1 }, 'scenario'],
     [{ gridDefinitionId: 'unknown-grid' }, 'grid'],
@@ -148,7 +192,7 @@ describe('clock commands and replay', () => {
       const invalid = {
         ...scenarioReplayFixture(),
         ...override,
-      } as unknown as ScenarioReplayV2;
+      } as unknown as ScenarioReplayV3;
       expect(() => runScenarioReplay(invalid)).toThrow(message);
     },
   );
@@ -264,9 +308,25 @@ describe('clock commands and replay', () => {
         },
       ],
     } as unknown as ClockReplayV1;
+    const legacyJobCommand = {
+      ...replayFixture(),
+      commands: [
+        {
+          atTick: 0,
+          command: {
+            employeeId: 'employee-ada',
+            jobId: 'open-checkout',
+            type: 'job.assign',
+          },
+          id: 'legacy-job',
+          sequence: 0,
+        },
+      ],
+    } as ClockReplayV1;
 
     expect(() => runClockReplay(invalidVersion)).toThrow('version');
     expect(() => runClockReplay(invalidCommand)).toThrow('command');
+    expect(() => runClockReplay(legacyJobCommand)).toThrow('only supports time');
   });
 
   it.each([

@@ -1,28 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import { advanceSimulationByClockUnits } from './advanceSimulation';
+import { SIMULATION_CHECKPOINT_VERSION, hashDomainEventLedger } from './checkpoint';
 import {
-  SIMULATION_CHECKPOINT_VERSION,
+  createInitialState,
   createSimulationCheckpoint,
-  hashDomainEventLedger,
+  dispatchSimulationCommand,
   hashSimulationState,
-} from './checkpoint';
-import { createInitialState } from '../scenarios/greatPlains';
+} from '../scenarios/greatPlains';
 import { CLOCK_UNITS_PER_MINUTE } from './clock';
 import { drawSimulationRandomInteger } from './random';
 import type { ResourceChange } from './types';
 
 describe('simulation checkpoint hash', () => {
-  it('serializes checkpoint version 4 with exact RNG and station state', () => {
+  it('serializes checkpoint version 5 with exact RNG, station, and workforce state', () => {
     const initial = createInitialState();
     const advanced = drawSimulationRandomInteger(initial, 0, 10).state;
     const checkpoint = createSimulationCheckpoint(advanced);
     const restored: unknown = JSON.parse(JSON.stringify(checkpoint));
 
-    expect(SIMULATION_CHECKPOINT_VERSION).toBe(4);
+    expect(SIMULATION_CHECKPOINT_VERSION).toBe(5);
     expect(checkpoint.rng).toEqual(advanced.rng);
     expect(checkpoint).toMatchObject({
       scenarioId: 'great-plains',
-      scenarioVersion: 2,
+      scenarioVersion: 3,
       stationOccupancy: {
         gridDefinitionId: 'great-plains-station-grid',
         gridDefinitionVersion: 1,
@@ -85,6 +85,44 @@ describe('simulation checkpoint hash', () => {
     expect(checkpointOccupant.origin).not.toEqual(stateOccupant.origin);
   });
 
+  it('hashes and deeply snapshots mid-route workforce progress', () => {
+    const initial = createInitialState();
+    const assigned = dispatchSimulationCommand(initial, {
+      atTick: 0,
+      command: {
+        employeeId: 'employee-dale',
+        jobId: 'watch-beacon',
+        type: 'job.assign',
+      },
+      id: 'assign-dale',
+      sequence: 0,
+    }).state;
+    const progressed = advanceSimulationByClockUnits(assigned, 7);
+    const checkpoint = createSimulationCheckpoint(progressed);
+    const checkpointEmployee = checkpoint.employees.find(
+      ({ id }) => id === 'employee-dale',
+    );
+    const stateEmployee = progressed.employees.find(({ id }) => id === 'employee-dale');
+    if (
+      checkpointEmployee?.activity.status !== 'traveling' ||
+      stateEmployee?.activity.status !== 'traveling'
+    ) {
+      throw new Error('Expected Dale to be traveling.');
+    }
+
+    expect(hashSimulationState(progressed)).not.toBe(hashSimulationState(assigned));
+    expect(checkpointEmployee.activity).toEqual(stateEmployee.activity);
+    (checkpointEmployee.position as { x: number }).x = 31;
+    (checkpointEmployee.activity.path[0] as { x: number }).x = 30;
+    (checkpointEmployee.activity.destination as { x: number }).x = 29;
+
+    expect(checkpointEmployee.position).not.toEqual(stateEmployee.position);
+    expect(checkpointEmployee.activity.path).not.toEqual(stateEmployee.activity.path);
+    expect(checkpointEmployee.activity.destination).not.toEqual(
+      stateEmployee.activity.destination,
+    );
+  });
+
   it('changes when authoritative resources change', () => {
     const initial = createInitialState();
     const changed = {
@@ -105,7 +143,7 @@ describe('simulation checkpoint hash', () => {
     );
   });
 
-  it('hashes scenario identity in both state and the self-describing ledger', () => {
+  it('rejects state identity outside its context and hashes ledger identity', () => {
     const initial = createInitialState();
     const changed = {
       ...initial,
@@ -117,7 +155,7 @@ describe('simulation checkpoint hash', () => {
       scenarioVersion: initial.scenarioVersion + 1,
     };
 
-    expect(hashSimulationState(changed)).not.toBe(hashSimulationState(initial));
+    expect(() => hashSimulationState(changed)).toThrow(/scenario context/u);
     expect(hashDomainEventLedger(changed.eventLedger)).not.toBe(
       hashDomainEventLedger(initial.eventLedger),
     );
@@ -181,6 +219,71 @@ describe('simulation checkpoint hash', () => {
     };
 
     expect(() => createSimulationCheckpoint(invalid)).toThrow(/duplicate ID/u);
+  });
+
+  it('rejects malformed workforce progress before checkpointing', () => {
+    const initial = createInitialState();
+    const invalid = {
+      ...initial,
+      employees: initial.employees.map((employee) =>
+        employee.id === 'employee-ada'
+          ? {
+              ...employee,
+              activity: {
+                assignmentId: 'assignment-ada',
+                destination: { x: 10, z: 17 },
+                jobId: 'open-checkout',
+                movementProgressClockUnits: 0,
+                nextPathIndex: 0,
+                path: [],
+                status: 'traveling' as const,
+                targetId: 'checkout-counter',
+                totalWorkClockUnits: 80,
+              },
+            }
+          : employee,
+      ),
+    };
+
+    expect(() => createSimulationCheckpoint(invalid)).toThrow(/empty travel path/u);
+  });
+
+  it('rejects teleporting, out-of-grid, and structurally blocked routes', () => {
+    const initial = createInitialState();
+    const assigned = dispatchSimulationCommand(initial, {
+      atTick: 0,
+      command: {
+        employeeId: 'employee-dale',
+        jobId: 'watch-beacon',
+        type: 'job.assign',
+      },
+      id: 'assign-dale-route-check',
+      sequence: 0,
+    }).state;
+    const replaceFirstPathCell = (x: number, z: number) => ({
+      ...assigned,
+      employees: assigned.employees.map((employee) =>
+        employee.id === 'employee-dale' && employee.activity.status === 'traveling'
+          ? {
+              ...employee,
+              activity: {
+                ...employee.activity,
+                path: [{ x, z }, ...employee.activity.path.slice(1)],
+              },
+            }
+          : employee,
+      ),
+    });
+
+    expect(() => createSimulationCheckpoint(replaceFirstPathCell(30, 23))).toThrow(
+      /not contiguous|cursor is disconnected/u,
+    );
+    expect(() => createSimulationCheckpoint(replaceFirstPathCell(-1, 0))).toThrow(
+      /non-negative|leaves the station/u,
+    );
+    expect(() => createSimulationCheckpoint(replaceFirstPathCell(3, 6))).toThrow(
+      /blocked cell/u,
+    );
   });
 
   it('includes employee names, event payloads, and clock-step remainder', () => {

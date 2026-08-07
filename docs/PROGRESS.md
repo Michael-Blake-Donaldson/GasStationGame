@@ -4,7 +4,7 @@ Last updated: 2026-08-07
 
 ## Current milestone
 
-**M1 — Simulation skeleton:** GS-010 fixed-step time, GS-011 typed commands/events, GS-012 seeded RNG/scenario replay, GS-013 station grid/occupancy, and GS-017 responsive presentation/modal foundations are verified. Deterministic employee movement and jobs are next, followed by saves.
+**M1 — Simulation skeleton:** GS-010 fixed-step time, GS-011 typed commands/events, GS-012 seeded RNG/scenario replay, GS-013 station grid/occupancy, GS-014 deterministic employee movement/jobs, and GS-017 responsive presentation/modal foundations are verified. Versioned save/load is next.
 
 The repository has moved from a GDD-only state to a code-first project foundation with its first replay-grade simulation subsystem. The vertical slice is not yet playable.
 
@@ -34,32 +34,34 @@ The repository has moved from a GDD-only state to a code-first project foundatio
 - Completed GS-013 with a validated 32×24 Great Plains grid, row-major integer coordinates, quarter-turn rectangular footprints, reserved store/garage plots, fixed pumps and Beacon occupancy, flexible-build checks, and deterministic structured rejection causes.
 - Added canonical JSON-native station occupancy to Great Plains scenario definition v2 state, the self-describing start event, replay envelope v2, checkpoint v4, and state hashing. Great Plains content is injected through a bound scenario-composition module so the simulation core remains independent of region files and rejects replay/grid mismatches.
 - Added semantic definition/state validation for safe numeric indexing, unique technical IDs, bounds, plot compatibility/reservations, overlaps, canonical source ordering, detached snapshots, and malformed persisted occupancy.
+- Completed GS-014 with scenario-defined employee positions, jobs, subject-adjacent interaction cells, deterministic four-way shortest-path routing, exact per-clock-unit travel/work progress, cancellation, and simultaneous-event ordering by employee ID.
+- Added `job.assign` and `job.cancel` commands with stable rejection causes plus correlated `job.assigned`, `employee.arrived`, `job.started`, `job.cancelled`, and `job.completed` events. Scenario replay v3 and checkpoint v5 preserve and validate the complete workforce state, including route continuity, destinations, progress, and unique assignment identity.
 
 ## Verified evidence
 
-| Check                            | Result | Evidence                                                                                                                                                                               |
-| -------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GDD preserved                    | Pass   | Git recognizes the byte-identical file move under `docs/`                                                                                                                              |
-| Formatting                       | Pass   | `pnpm format:check`                                                                                                                                                                    |
-| Lint                             | Pass   | `pnpm lint --max-warnings=0`                                                                                                                                                           |
-| Type checking                    | Pass   | `pnpm typecheck`                                                                                                                                                                       |
-| Unit tests                       | Pass   | 196/196 tests across 16 files with `pnpm test`, including grid/occupancy invariants, RNG/replay, modal accessibility, visual fixtures, renderer lifecycle, and Strict Mode integration |
-| Coverage                         | Pass   | 98.38% functions, 93.97% lines, 93.59% statements, and 87.11% branches with `pnpm test:coverage`                                                                                       |
-| Browser production build         | Pass   | `pnpm build`; one JS asset, 825.63 kB minified / 222.16 kB gzip                                                                                                                        |
-| Desktop manifest/Rust formatting | Pass   | `cargo metadata --no-deps` and `cargo fmt --check`                                                                                                                                     |
-| Desktop Rust shell               | Pass   | Rust/Cargo 1.97.1 MSVC; rustfmt, Clippy with denied warnings, Cargo tests, and `cargo check --locked`                                                                                  |
-| Declared Rust minimum            | Pass   | Rust/Cargo 1.88.0 MSVC completes `cargo check --locked`; CI verifies this MSRV separately                                                                                              |
-| Desktop release executable       | Pass   | `pnpm build:desktop`; optimized Windows executable built and remained healthy in an 8-second WebView2 smoke test                                                                       |
-| Local NSIS packaging             | Pass   | `pnpm build:installer`; local x64 installer produced without publishing or installing it                                                                                               |
-| Configurable desktop title       | Pass   | A `Prairie Signal` test build embedded that product name and exposed the same live window title                                                                                        |
-| Visual smoke review              | Pass   | Responsive matrix plus all nine day/dusk/night × stable/critical/dark station fixtures; one canvas each, no fresh console warnings or horizontal overflow                              |
+| Check                            | Result | Evidence                                                                                                                                                                                                                       |
+| -------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| GDD preserved                    | Pass   | Git recognizes the byte-identical file move under `docs/`                                                                                                                                                                      |
+| Formatting                       | Pass   | `pnpm format:check`                                                                                                                                                                                                            |
+| Lint                             | Pass   | `pnpm lint --max-warnings=0`                                                                                                                                                                                                   |
+| Type checking                    | Pass   | `pnpm typecheck`                                                                                                                                                                                                               |
+| Unit tests                       | Pass   | 226/226 tests across 18 files with `pnpm test`, including deterministic employee pathfinding, job lifecycle, replay, checkpoint integrity, grid/RNG invariants, accessibility, renderer lifecycle, and Strict Mode integration |
+| Coverage                         | Pass   | 98.91% functions, 92.37% lines, 92.06% statements, and 85.40% branches with `pnpm test:coverage`                                                                                                                               |
+| Browser production build         | Pass   | `pnpm build`; one JS asset, 842.31 kB minified / 226.49 kB gzip                                                                                                                                                                |
+| Desktop manifest/Rust formatting | Pass   | `cargo metadata --no-deps` and `cargo fmt --check`                                                                                                                                                                             |
+| Desktop Rust shell               | Pass   | Rust/Cargo 1.97.1 MSVC; rustfmt, Clippy with denied warnings, Cargo tests, and `cargo check --locked`                                                                                                                          |
+| Declared Rust minimum            | Pass   | Rust/Cargo 1.88.0 MSVC completes `cargo check --locked`; CI verifies this MSRV separately                                                                                                                                      |
+| Desktop release executable       | Pass   | `pnpm build:desktop`; optimized Windows executable built and remained healthy in an 8-second WebView2 smoke test                                                                                                               |
+| Local NSIS packaging             | Pass   | `pnpm build:installer`; local x64 installer produced without publishing or installing it                                                                                                                                       |
+| Configurable desktop title       | Pass   | A `Prairie Signal` test build embedded that product name and exposed the same live window title                                                                                                                                |
+| Visual smoke review              | Pass   | Responsive matrix plus all nine day/dusk/night × stable/critical/dark station fixtures; one canvas each, no fresh console warnings or horizontal overflow                                                                      |
 
 ## Honest capability boundary
 
-The current screen is a presentation and architecture scaffold driven by a real fixed-step phase clock, authoritative event ledger, versioned seeded RNG, scenario replay harness, and deterministic station occupancy. Time-mode changes are the only command payload implemented so far, no gameplay system consumes randomness yet, and the authoritative grid is not projected into the current placeholder scene. The crew cards, job button, threat tags, and station geometry are representative placeholders. The repository does **not** yet implement customers, jobs, construction, pathfinding, saves, automatic combat, actual power allocation, traveler dialogue, the signature creature, wind/fire, audio, or the complete three-night scenario.
+The current screen is a presentation and architecture scaffold driven by a real fixed-step phase clock, authoritative event ledger, versioned seeded RNG, scenario replay harness, deterministic station occupancy, and headless employee jobs. Time and job commands exist in the simulation, but the current crew cards and job button are still representative placeholders and do not expose the job workflow; employee movement is not rendered. No gameplay system consumes randomness yet. The repository does **not** yet implement customers, construction, saves, automatic combat, actual power allocation, traveler dialogue, the signature creature, wind/fire, audio, or the complete three-night scenario.
 
 ## Next work
 
 1. Add repository-owned, license-documented typography when external asset acquisition is separately authorized (GS-005), completing the remaining GS-018 baseline requirement.
-2. Add deterministic employee movement and job assignment on the authoritative grid (GS-014).
-3. Design versioned save/load before simulation state grows further (GS-015).
+2. Design and implement versioned save/load before simulation state grows further (GS-015).
+3. Add corrupted-save recovery rotation after the core format is proven (GS-016).

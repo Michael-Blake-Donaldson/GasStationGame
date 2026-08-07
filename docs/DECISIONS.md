@@ -100,3 +100,11 @@ Decisions are append-only. To change one, add a new decision that supersedes it 
 - **Context:** The GDD combines authored major-building plots with flexible utilities and defenses. Movement, construction, saves, and later path validation need one deterministic spatial contract without making rendering authoritative.
 - **Decision:** Use zero-based integer `{x, z}` cells with row-major indexes and quarter-turn rectangular footprints. Content defines grid dimensions, flexible-build rectangles, reserved authored plots, and fixed/initial occupants. Simulation state stores only the grid definition ID/version and ID-sorted placement facts; expanded cells and lookup maps are derived. Empty authored plots remain reserved, and one structural occupant may own a cell in GS-013.
 - **Consequences:** Scenario composition binds and injects validated Great Plains identity plus content into the pure simulation core. Great Plains scenario definition version 2, replay envelope version 2, and checkpoint version 4 identify and hash grid occupancy. Construction commands, interaction cells, navigation, utilities, and layered overlap remain separate decisions and backlog items.
+
+## DEC-013 — Make employee work a scenario-authored deterministic lifecycle
+
+- **Date:** 2026-08-07
+- **Status:** Accepted
+- **Context:** Day staffing and night reassignment need visible travel cost, reproducible routes, explainable rejection, and persistence-safe progress without coupling navigation to the renderer.
+- **Decision:** Define initial employee positions, jobs, work subjects, interaction cells, and work durations in validated scenario data. Model employee activity as idle, traveling, or working. Use canonical four-way breadth-first search with structural occupancy as blockers, employees as non-blocking agents, and fixed tie-breaking. Advance travel and work only through authoritative integer clock units; route all assignment/cancellation through typed commands and lifecycle events.
+- **Consequences:** Scenario definition/replay advance to version 3 and checkpoints to version 5. Active routes and work progress are serializable and validated against scenario context. Reassignment preserves current position and incurs a fresh route. Skills, fatigue, job outputs, crowd avoidance, animation, and player-facing assignment UI remain explicit later work.

@@ -54,14 +54,39 @@ export const stationGridDefinitionSchema = z.object({
   ),
 });
 
+const workSubjectSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('occupant'), occupantId: technicalIdSchema }),
+  z.object({ kind: z.literal('authored-plot'), plotId: technicalIdSchema }),
+]);
+
+export const initialEmployeePositionSchema = z.object({
+  employeeId: technicalIdSchema,
+  position: gridCoordinateSchema,
+});
+
+export const workTargetDefinitionSchema = z.object({
+  id: technicalIdSchema,
+  interactionCells: z.array(gridCoordinateSchema).min(1),
+  subject: workSubjectSchema,
+});
+
+export const jobDefinitionSchema = z.object({
+  id: technicalIdSchema,
+  targetId: technicalIdSchema,
+  workDurationClockUnits: z.number().int().positive(),
+});
+
 export const regionSchema = z.object({
   id: technicalIdSchema,
   displayName: z.string().min(1),
   identity: z.array(z.string().min(1)).min(1),
   pressures: z.array(z.string().min(1)).min(1),
+  initialEmployeePositions: z.array(initialEmployeePositionSchema).min(1),
+  jobs: z.array(jobDefinitionSchema).min(1),
   startingThreats: z.array(z.string().min(1)).min(1),
   sliceNightCount: z.number().int().positive(),
   stationGrid: stationGridDefinitionSchema,
+  workTargets: z.array(workTargetDefinitionSchema).min(1),
 });
 
 export type RegionDefinition = z.infer<typeof regionSchema>;

@@ -13,6 +13,9 @@ describe('region content schema', () => {
       version: 1,
       width: 32,
     });
+    expect(greatPlainsRegion.initialEmployeePositions).toHaveLength(4);
+    expect(greatPlainsRegion.workTargets).toHaveLength(4);
+    expect(greatPlainsRegion.jobs).toHaveLength(4);
     expect(() =>
       assertStationGridDefinition(greatPlainsRegion.stationGrid),
     ).not.toThrow();
@@ -21,6 +24,12 @@ describe('region content schema', () => {
   it('rejects invalid technical identifiers', () => {
     expect(() =>
       regionSchema.parse({ ...greatPlainsRegion, id: 'Last Stop' }),
+    ).toThrow();
+    expect(() =>
+      regionSchema.parse({
+        ...greatPlainsRegion,
+        jobs: [{ ...greatPlainsRegion.jobs[0], id: 'Open Checkout' }],
+      }),
     ).toThrow();
   });
 });

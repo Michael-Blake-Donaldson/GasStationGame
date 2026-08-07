@@ -81,6 +81,19 @@ export const presentDomainEvent = (event: DomainEvent): DomainEventPresentation 
         message: `${String(event.targetNightCount)}-night vertical slice complete.`,
         tone: 'positive',
       };
+    case 'job.assigned':
+      return { message: 'Crew assignment accepted.', tone: 'neutral' };
+    case 'employee.arrived':
+      return {
+        message: 'Assigned crew member reached the work area.',
+        tone: 'neutral',
+      };
+    case 'job.started':
+      return { message: 'Station work started.', tone: 'neutral' };
+    case 'job.cancelled':
+      return { message: 'Crew assignment cancelled.', tone: 'warning' };
+    case 'job.completed':
+      return { message: 'Station work completed.', tone: 'positive' };
   }
 };
 
@@ -88,6 +101,41 @@ export const presentCommandReceipt = (
   receipt: CommandReceipt,
 ): DomainEventPresentation => {
   switch (receipt.reason) {
+    case 'employee-busy':
+      return { message: 'Assignment rejected: employee is busy.', tone: 'warning' };
+    case 'employee-idle':
+      return { message: 'Cancellation rejected: employee is idle.', tone: 'warning' };
+    case 'employee-not-found':
+      return {
+        message: 'Assignment rejected: employee was not found.',
+        tone: 'warning',
+      };
+    case 'job-assigned':
+      return { message: 'Crew assignment accepted.', tone: 'neutral' };
+    case 'job-cancelled':
+      return { message: 'Crew assignment cancelled.', tone: 'neutral' };
+    case 'job-not-found':
+      return { message: 'Assignment rejected: job was not found.', tone: 'warning' };
+    case 'job-target-has-no-walkable-interaction':
+      return {
+        message: 'Assignment rejected: every work position is blocked.',
+        tone: 'warning',
+      };
+    case 'job-target-unavailable':
+      return {
+        message: 'Assignment rejected: the work target is unavailable.',
+        tone: 'warning',
+      };
+    case 'job-target-unreachable':
+      return {
+        message: 'Assignment rejected: no route reaches the work area.',
+        tone: 'warning',
+      };
+    case 'job-unavailable':
+      return {
+        message: 'Assignment rejected: job is already assigned.',
+        tone: 'warning',
+      };
     case 'command-scheduled-in-future':
       return {
         message: 'Command rejected: scheduled tick is not ready.',

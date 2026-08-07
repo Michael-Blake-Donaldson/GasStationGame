@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { advanceSimulationByClockUnits } from './advanceSimulation';
 import {
-  dispatchSimulationCommand,
+  dispatchSimulationCommand as dispatchWithContext,
   type CommandEnvelope,
   type SimulationCommand,
 } from './commands';
 import { CLOCK_UNITS_PER_MINUTE } from './clock';
-import { createInitialState } from '../scenarios/greatPlains';
+import {
+  createInitialState,
+  dispatchSimulationCommand,
+  greatPlainsSimulationContext,
+} from '../scenarios/greatPlains';
 
 const commandAtCurrentTick = (
   state: ReturnType<typeof createInitialState>,
@@ -147,6 +151,11 @@ describe('simulation command dispatch', () => {
     [{ sequence: -1 }, 'invalid-command-envelope'],
     [{ atTick: 0.5 }, 'invalid-command-envelope'],
     [{ command: { mode: 'warp', type: 'time-mode.set' } }, 'invalid-command-payload'],
+    [
+      { command: { employeeId: 'employee-ada', type: 'job.assign' } },
+      'invalid-command-payload',
+    ],
+    [{ command: { employeeId: '', type: 'job.cancel' } }, 'invalid-command-payload'],
     [{ command: null }, 'invalid-command-payload'],
     [{ command: { type: 'unknown' } }, 'unsupported-command-type'],
   ] as const)('rejects malformed runtime input %#', (override, reason) => {
@@ -217,5 +226,18 @@ describe('simulation command dispatch', () => {
     expect(dispatchSimulationCommand(initial, unknown).receipt.reason).toBe(
       'unsupported-command-type',
     );
+  });
+
+  it('rejects a state that does not match the injected scenario context', () => {
+    const initial = createInitialState();
+    const mismatched = { ...initial, scenarioVersion: initial.scenarioVersion + 1 };
+
+    expect(() =>
+      dispatchWithContext(
+        mismatched,
+        commandAtCurrentTick(mismatched, 'normal'),
+        greatPlainsSimulationContext,
+      ),
+    ).toThrow(/does not match/u);
   });
 });

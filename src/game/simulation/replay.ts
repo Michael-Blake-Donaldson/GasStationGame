@@ -1,6 +1,7 @@
 import { advanceSimulationStep } from './advanceSimulation';
 import {
   dispatchSimulationCommand,
+  parseSimulationCommand,
   type CommandEnvelope,
   type CommandReceipt,
 } from './commands';
@@ -11,15 +12,15 @@ import {
   SEEDED_RANDOM_VERSION,
   type SeededRandomState,
 } from './random';
-import type { ScenarioDefinition } from './scenario';
-import type { DomainEvent, SimulationState, TimeMode } from './types';
+import type { SimulationContext } from './scenario';
+import type { DomainEvent, SimulationState } from './types';
 
-export interface ScenarioReplayV2 {
+export interface ScenarioReplayV3 {
   readonly commands: readonly CommandEnvelope[];
   readonly gridDefinitionId: string;
   readonly gridDefinitionVersion: number;
   readonly replayKind: 'scenario';
-  readonly replayVersion: 2;
+  readonly replayVersion: 3;
   readonly rng: {
     readonly algorithm: typeof SEEDED_RANDOM_ALGORITHM;
     readonly seed: number;
@@ -60,8 +61,6 @@ export interface ClockReplayResult extends ScenarioReplayResult {
   readonly events: readonly DomainEvent[];
 }
 
-const TIME_MODES: readonly TimeMode[] = ['paused', 'slow', 'normal', 'fast'];
-
 const isRecord = (value: unknown): value is Record<PropertyKey, unknown> =>
   typeof value === 'object' && value !== null;
 
@@ -73,7 +72,8 @@ const assertNonNegativeSafeInteger = (value: number, name: string): void => {
 
 const validateCommands: (
   value: unknown,
-) => asserts value is readonly CommandEnvelope[] = (value) => {
+  allowJobCommands: boolean,
+) => asserts value is readonly CommandEnvelope[] = (value, allowJobCommands) => {
   if (!Array.isArray(value)) throw new RangeError('commands must be an array.');
 
   const ids = new Set<string>();
@@ -105,16 +105,20 @@ const validateCommands: (
     if (!isRecord(envelope.command)) {
       throw new RangeError('Replay command payloads must be objects.');
     }
-    if (
-      envelope.command.type !== 'time-mode.set' ||
-      !TIME_MODES.includes(envelope.command.mode as TimeMode)
-    ) {
+    const command = parseSimulationCommand(envelope.command);
+    if (command === undefined) {
       throw new RangeError('Unsupported scenario replay command.');
+    }
+    if (!allowJobCommands && command.type !== 'time-mode.set') {
+      throw new RangeError('Legacy clock replay only supports time commands.');
     }
   }
 };
 
-const validateCommonFields = (replay: Record<PropertyKey, unknown>): void => {
+const validateCommonFields = (
+  replay: Record<PropertyKey, unknown>,
+  allowJobCommands: boolean,
+): void => {
   if (typeof replay.stopAfterTick !== 'number') {
     throw new RangeError('stopAfterTick must be a number.');
   }
@@ -125,15 +129,16 @@ const validateCommonFields = (replay: Record<PropertyKey, unknown>): void => {
   if (!Number.isSafeInteger(replay.targetNightCount) || replay.targetNightCount < 1) {
     throw new RangeError('targetNightCount must be a positive safe integer.');
   }
-  validateCommands(replay.commands);
+  validateCommands(replay.commands, allowJobCommands);
 };
 
 const validateScenarioReplay: (
   replay: unknown,
-  scenarioDefinition: ScenarioDefinition,
-) => asserts replay is ScenarioReplayV2 = (replay, scenarioDefinition) => {
+  context: SimulationContext,
+) => asserts replay is ScenarioReplayV3 = (replay, context) => {
+  const scenarioDefinition = context.scenario;
   if (!isRecord(replay)) throw new RangeError('Scenario replay must be an object.');
-  if (replay.replayKind !== 'scenario' || replay.replayVersion !== 2) {
+  if (replay.replayKind !== 'scenario' || replay.replayVersion !== 3) {
     throw new RangeError('Unsupported scenario replay format.');
   }
   if (
@@ -159,7 +164,7 @@ const validateScenarioReplay: (
     throw new RangeError('rng.seed must be a number.');
   }
   assertNonNegativeSafeInteger(replay.rng.seed, 'rng.seed');
-  validateCommonFields(replay);
+  validateCommonFields(replay, true);
 };
 
 const validateClockReplay: (replay: unknown) => asserts replay is ClockReplayV1 = (
@@ -171,7 +176,7 @@ const validateClockReplay: (replay: unknown) => asserts replay is ClockReplayV1 
   }
   if (typeof replay.seed !== 'number') throw new RangeError('seed must be a number.');
   assertNonNegativeSafeInteger(replay.seed, 'seed');
-  validateCommonFields(replay);
+  validateCommonFields(replay, false);
 };
 
 const orderedCommands = (
@@ -182,15 +187,15 @@ const orderedCommands = (
   );
 
 export const runScenarioReplay = (
-  replay: ScenarioReplayV2,
-  scenarioDefinition: ScenarioDefinition,
+  replay: ScenarioReplayV3,
+  context: SimulationContext,
 ): ScenarioReplayResult => {
-  validateScenarioReplay(replay, scenarioDefinition);
+  validateScenarioReplay(replay, context);
 
   const commands = orderedCommands(replay.commands);
   let commandIndex = 0;
   let state = createInitialState(
-    scenarioDefinition,
+    context.scenario,
     replay.rng.seed,
     replay.targetNightCount,
   );
@@ -200,7 +205,7 @@ export const runScenarioReplay = (
     while (commands[commandIndex]?.atTick === state.tick) {
       const envelope = commands[commandIndex];
       if (envelope === undefined) break;
-      const result = dispatchSimulationCommand(state, envelope);
+      const result = dispatchSimulationCommand(state, envelope, context);
       state = result.state;
       receipts.push(result.receipt);
       commandIndex += 1;
@@ -231,7 +236,7 @@ export const runScenarioReplay = (
     finalRng: state.rng,
     receipts,
     state,
-    stateHash: hashSimulationState(state),
+    stateHash: hashSimulationState(state, context),
     stopReason,
     unconsumedCommandIds,
   };
@@ -239,16 +244,17 @@ export const runScenarioReplay = (
 
 export const runClockReplay = (
   replay: ClockReplayV1,
-  scenarioDefinition: ScenarioDefinition,
+  context: SimulationContext,
 ): ClockReplayResult => {
   validateClockReplay(replay);
+  const scenarioDefinition = context.scenario;
   const result = runScenarioReplay(
     {
       commands: replay.commands,
       gridDefinitionId: scenarioDefinition.stationGridDefinition.id,
       gridDefinitionVersion: scenarioDefinition.stationGridDefinition.version,
       replayKind: 'scenario',
-      replayVersion: 2,
+      replayVersion: 3,
       rng: {
         algorithm: SEEDED_RANDOM_ALGORITHM,
         seed: replay.seed,
@@ -259,7 +265,7 @@ export const runClockReplay = (
       stopAfterTick: replay.stopAfterTick,
       targetNightCount: replay.targetNightCount,
     },
-    scenarioDefinition,
+    context,
   );
   return { ...result, events: result.eventLedger };
 };

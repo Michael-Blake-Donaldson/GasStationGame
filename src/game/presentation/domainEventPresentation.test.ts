@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { advanceSimulationByClockUnits } from '../simulation/advanceSimulation';
 import { CLOCK_UNITS_PER_MINUTE } from '../simulation/clock';
-import { createInitialState } from '../scenarios/greatPlains';
+import {
+  createInitialState,
+  dispatchSimulationCommand,
+} from '../scenarios/greatPlains';
 import {
   presentCommandReceipt,
   presentDomainEvent,
@@ -45,6 +48,32 @@ describe('domain event presentation', () => {
         status: 'rejected',
       }),
     ).toEqual({ message: 'Command rejected: invalid payload.', tone: 'warning' });
+  });
+
+  it('presents job lifecycle facts without storing player-facing copy', () => {
+    const initial = createInitialState();
+    const assigned = dispatchSimulationCommand(initial, {
+      atTick: 0,
+      command: {
+        employeeId: 'employee-ada',
+        jobId: 'open-checkout',
+        type: 'job.assign',
+      },
+      id: 'assign-ada',
+      sequence: 0,
+    });
+    const event = assigned.state.eventLedger.at(-1);
+    if (event === undefined) throw new Error('Assignment event is missing.');
+
+    expect(event).not.toHaveProperty('message');
+    expect(presentDomainEvent(event)).toEqual({
+      message: 'Crew assignment accepted.',
+      tone: 'neutral',
+    });
+    expect(presentCommandReceipt(assigned.receipt)).toEqual({
+      message: 'Crew assignment accepted.',
+      tone: 'neutral',
+    });
   });
 
   it.each([-1, 0.5, Number.POSITIVE_INFINITY])(

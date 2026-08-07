@@ -5,6 +5,65 @@
   "pressures": ["High wind", "Grass fire", "Stampede risk", "Moving horizon lights"],
   "startingThreats": ["Hollow Walkers", "Headlight Men", "Unknown signature creature"],
   "sliceNightCount": 3,
+  "initialEmployeePositions": [
+    { "employeeId": "employee-ada", "position": { "x": 10, "z": 18 } },
+    { "employeeId": "employee-bo", "position": { "x": 12, "z": 9 } },
+    { "employeeId": "employee-cora", "position": { "x": 20, "z": 18 } },
+    { "employeeId": "employee-dale", "position": { "x": 5, "z": 10 } }
+  ],
+  "workTargets": [
+    {
+      "id": "checkout-counter",
+      "subject": { "kind": "occupant", "occupantId": "main-store" },
+      "interactionCells": [{ "x": 10, "z": 17 }]
+    },
+    {
+      "id": "west-pump-service",
+      "subject": { "kind": "occupant", "occupantId": "pump-island-west" },
+      "interactionCells": [
+        { "x": 9, "z": 8 },
+        { "x": 10, "z": 8 }
+      ]
+    },
+    {
+      "id": "garage-inspection",
+      "subject": { "kind": "authored-plot", "plotId": "garage-plot" },
+      "interactionCells": [
+        { "x": 21, "z": 17 },
+        { "x": 22, "z": 17 }
+      ]
+    },
+    {
+      "id": "beacon-watch",
+      "subject": { "kind": "occupant", "occupantId": "beacon-sign" },
+      "interactionCells": [
+        { "x": 4, "z": 6 },
+        { "x": 3, "z": 7 }
+      ]
+    }
+  ],
+  "jobs": [
+    {
+      "id": "open-checkout",
+      "targetId": "checkout-counter",
+      "workDurationClockUnits": 80
+    },
+    {
+      "id": "check-pumps",
+      "targetId": "west-pump-service",
+      "workDurationClockUnits": 120
+    },
+    {
+      "id": "inspect-garage-plot",
+      "targetId": "garage-inspection",
+      "workDurationClockUnits": 160
+    },
+    {
+      "id": "watch-beacon",
+      "targetId": "beacon-watch",
+      "workDurationClockUnits": 100
+    }
+  ],
   "stationGrid": {
     "id": "great-plains-station-grid",
     "version": 1,

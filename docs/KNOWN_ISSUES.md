@@ -8,9 +8,9 @@ Last updated: 2026-08-07
 
 - **Severity:** Expected / P0 roadmap gap
 - **Status:** Open
-- **Symptoms:** Crew assignment, power allocation, camera help, threat tags, and station objects appear but are not connected to gameplay commands.
+- **Symptoms:** Authoritative job assignment now exists headlessly, but the visible crew assignment controls, power allocation, camera help, threat tags, and station objects are not connected to those gameplay commands.
 - **Impact:** The screen must not be described as a playable slice.
-- **Plan:** GS-013 established authoritative occupancy; GS-014 through GS-035 connect jobs, movement, power, combat, and reports through the GS-011 command/event foundation.
+- **Plan:** GS-013/014 established authoritative occupancy, movement, and jobs; the next player-facing workflow and GS-020 through GS-035 connect operations, power, combat, and reports through the GS-011 command/event foundation.
 
 ### KI-002 — Simulation clock is not yet a replay-grade fixed-step engine
 
@@ -55,7 +55,7 @@ Last updated: 2026-08-07
 
 - **Severity:** Low
 - **Status:** Open
-- **Symptoms:** React, Tauri's title adapter, the deterministic simulation foundation, and the direct Three.js prototype currently produce one 818.18 kB minified JavaScript asset (219.89 kB gzip).
+- **Symptoms:** React, Tauri's title adapter, the deterministic simulation foundation, and the direct Three.js prototype currently produce one 842.31 kB minified JavaScript asset (226.49 kB gzip).
 - **Impact:** Startup is acceptable for the scaffold but may grow without an asset/scene loading boundary.
 - **Plan:** Measure startup and target scenes in GS-056, then split by actual loading phases rather than speculative package boundaries. Vite's advisory threshold is temporarily 850 kB so this known baseline does not appear as an unexplained build warning.
 
@@ -80,13 +80,13 @@ Last updated: 2026-08-07
 - **Resolution:** GS-017 removed the fixed minimum viewport, introduced deliberate desktop/tablet/mobile composition, raised readable label sizing, extracted the browser simulation runtime from `App`, added semantic meters and grouped pressed-state time controls, and established one accessible dialog/drawer primitive used by the station guide and authoritative event log. Focus containment/return, inert background, Escape, backdrop dismissal, body-scroll restoration, and 320–1920 px layouts are verified.
 - **Remaining boundary:** GS-005 still owns licensed repository typography. GS-018 owns deterministic phase/Beacon visual fixtures and Three.js consistency; GS-054 remains the representative-art gate.
 
-### KI-011 — Authoritative grid is not yet projected into gameplay or rendering
+### KI-011 — Authoritative movement is not yet projected into rendering or controls
 
 - **Severity:** Expected / P0 roadmap gap
 - **Status:** Open
-- **Symptoms:** Great Plains occupancy is deterministic and replayable, but employees do not navigate it and the procedural station scene is not generated from its cells.
-- **Impact:** Grid state currently proves domain and persistence contracts but does not create player interaction or visible placement feedback.
-- **Plan:** GS-014 adds deterministic movement/jobs; GS-022/023 add construction and path validation. Rendering projection follows the first player-facing grid workflow so placeholder art does not dictate domain geometry.
+- **Symptoms:** Great Plains occupancy, interaction cells, employee routes, and job progress are deterministic and replayable, but the procedural station scene is not generated from the grid and employees/routes are not visible or controllable through the current HUD.
+- **Impact:** The simulation proves domain and persistence contracts but does not yet provide player interaction or visible movement/placement feedback.
+- **Plan:** Expose jobs through the first player-facing grid workflow after GS-015/016 persistence foundations; GS-022/023 add construction and construction-time path validation. Keep presentation projection downstream so placeholder art does not dictate domain geometry.
 
 ## Product and design risks
 

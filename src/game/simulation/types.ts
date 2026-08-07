@@ -1,5 +1,5 @@
 import type { SeededRandomState } from './random';
-import type { StationOccupancyState } from './grid';
+import type { GridCoordinate, StationOccupancyState } from './grid';
 
 export type SimulationPhase = 'morning' | 'day' | 'dusk' | 'night';
 export type TimeMode = 'paused' | 'slow' | 'normal' | 'fast';
@@ -14,12 +14,37 @@ export interface Resources {
 }
 
 export interface Employee {
-  id: string;
-  name: string;
-  role: string;
-  fatigue: number;
-  relationship: number;
+  readonly activity: EmployeeActivity;
+  readonly fatigue: number;
+  readonly id: string;
+  readonly name: string;
+  readonly position: GridCoordinate;
+  readonly relationship: number;
+  readonly role: string;
 }
+
+export type EmployeeActivity =
+  | { readonly status: 'idle' }
+  | {
+      readonly assignmentId: string;
+      readonly destination: GridCoordinate;
+      readonly jobId: string;
+      readonly movementProgressClockUnits: number;
+      readonly nextPathIndex: number;
+      readonly path: readonly GridCoordinate[];
+      readonly status: 'traveling';
+      readonly targetId: string;
+      readonly totalWorkClockUnits: number;
+    }
+  | {
+      readonly assignmentId: string;
+      readonly destination: GridCoordinate;
+      readonly jobId: string;
+      readonly remainingWorkClockUnits: number;
+      readonly status: 'working';
+      readonly targetId: string;
+      readonly totalWorkClockUnits: number;
+    };
 
 export type ResourceKey = keyof Resources;
 
@@ -81,6 +106,55 @@ export type DomainEvent =
       reason: 'target-night-count-reached';
       targetNightCount: number;
       type: 'slice.completed';
+    })
+  | (DomainEventBase & {
+      assignmentId: string;
+      destination: GridCoordinate;
+      employeeId: string;
+      jobId: string;
+      pathLength: number;
+      reason: 'player-request';
+      targetId: string;
+      type: 'job.assigned';
+    })
+  | (DomainEventBase & {
+      assignmentId: string;
+      destination: GridCoordinate;
+      employeeId: string;
+      jobId: string;
+      reason: 'job-travel-completed';
+      targetId: string;
+      traveledCellCount: number;
+      type: 'employee.arrived';
+    })
+  | (DomainEventBase & {
+      assignmentId: string;
+      employeeId: string;
+      jobId: string;
+      reason: 'employee-at-interaction-cell';
+      targetId: string;
+      totalWorkClockUnits: number;
+      type: 'job.started';
+    })
+  | (DomainEventBase & {
+      assignmentId: string;
+      employeeId: string;
+      jobId: string;
+      position: GridCoordinate;
+      previousActivity: 'traveling' | 'working';
+      reason: 'player-request';
+      remainingPathCells: number;
+      remainingWorkClockUnits: number;
+      type: 'job.cancelled';
+    })
+  | (DomainEventBase & {
+      assignmentId: string;
+      employeeId: string;
+      jobId: string;
+      position: GridCoordinate;
+      reason: 'work-duration-reached';
+      targetId: string;
+      type: 'job.completed';
     });
 
 export interface SimulationState {
