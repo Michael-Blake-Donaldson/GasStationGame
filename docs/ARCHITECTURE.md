@@ -53,7 +53,7 @@ Forbidden dependencies:
 
 ## Simulation model
 
-The final M1 core will use:
+The M1 core uses or will expand:
 
 - a fixed tick and explicit phase state machine;
 - stable entity IDs and plain serializable component stores;
@@ -64,7 +64,9 @@ The final M1 core will use:
 - immutable external snapshots/selectors;
 - state hashing and command replay for regression tests.
 
-The initial scaffold has a pure minute-step clock and resource transitions. It is intentionally not yet the final fixed-tick engine.
+GS-010 established the clock kernel: one engine step represents 100,000 real microseconds, and authoritative time uses 40 integer clock units per simulation minute. Slow, normal, and daytime-fast rates advance 3, 12, and 48 clock units per full step respectively; a step crossing a phase boundary apportions its remaining integer time at the new phase's effective rate and carries only an integer sub-unit remainder. Night caps fast mode at the normal rate and canonicalizes pause requests to slow. The browser owns the elapsed-time accumulator, caps work per pump without dropping debt, and discards hidden/paused catch-up time. Simulation state contains no wall-clock timestamp or floating-point time remainder.
+
+The clock replay fixture accepts only ordered `time-mode.set` commands and produces stable receipts plus a diagnostic checkpoint hash. It is a regression foundation, not the general domain-command/event system or a save format. GS-011 expands commands and reason-coded events; GS-012 adds serializable RNG and scenario-level replay.
 
 ## Content model
 

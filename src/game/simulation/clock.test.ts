@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { formatClock, phaseForMinuteOfDay, timeScaleForMode } from './clock';
+import {
+  CLOCK_UNITS_PER_MINUTE,
+  clockUnitsForFixedStep,
+  effectiveTimeMode,
+  formatClock,
+  phaseForClockUnit,
+  phaseForMinuteOfDay,
+  timeScaleForMode,
+  wholeMinuteForClockUnit,
+} from './clock';
 
 describe('simulation clock helpers', () => {
   it.each([
@@ -23,6 +32,22 @@ describe('simulation clock helpers', () => {
     expect(timeScaleForMode('normal', 'day')).toBe(1);
     expect(timeScaleForMode('fast', 'day')).toBe(4);
     expect(timeScaleForMode('fast', 'night')).toBe(1);
+  });
+
+  it('derives exact integer fixed-step rates and effective night modes', () => {
+    expect(clockUnitsForFixedStep('paused', 'day')).toBe(0);
+    expect(clockUnitsForFixedStep('slow', 'day')).toBe(3);
+    expect(clockUnitsForFixedStep('normal', 'day')).toBe(12);
+    expect(clockUnitsForFixedStep('fast', 'day')).toBe(48);
+    expect(clockUnitsForFixedStep('fast', 'night')).toBe(12);
+    expect(effectiveTimeMode('paused', 'night')).toBe('slow');
+    expect(effectiveTimeMode('fast', 'night')).toBe('normal');
+  });
+
+  it('derives whole minutes and phases from clock units', () => {
+    const clockUnit = (18 * 60 + 15) * CLOCK_UNITS_PER_MINUTE + 39;
+    expect(wholeMinuteForClockUnit(clockUnit)).toBe(18 * 60 + 15);
+    expect(phaseForClockUnit(clockUnit)).toBe('dusk');
   });
 
   it('formats midnight, morning, noon, and rollover values', () => {

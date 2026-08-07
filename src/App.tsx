@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { gameConfig } from './config/game';
 import { greatPlainsRegion } from './content/regions/greatPlains';
 import { StationScene } from './game/rendering/StationScene';
-import {
-  advanceSimulation,
-  currentDayNumber,
-  withTimeMode,
-} from './game/simulation/advanceSimulation';
-import { formatClock } from './game/simulation/clock';
+import { currentDayNumber } from './game/simulation/advanceSimulation';
+import { executeSimulationCommand } from './game/simulation/commands';
+import { formatClock, wholeMinuteForClockUnit } from './game/simulation/clock';
 import { createInitialState } from './game/simulation/createInitialState';
+import {
+  createFixedStepRunner,
+  pumpSimulation,
+} from './game/simulation/fixedStepRunner';
 import type { TimeMode } from './game/simulation/types';
 
 const RESOURCE_LABELS = [
@@ -28,13 +29,55 @@ const phaseLabel: Record<string, string> = {
 };
 
 export const App = () => {
-  const [simulation, setSimulation] = useState(createInitialState);
+  const [runtime, setRuntime] = useState(() => ({
+    runner: createFixedStepRunner(),
+    simulation: createInitialState(1987, gameConfig.verticalSliceNightCount),
+  }));
+  const simulation = runtime.simulation;
 
   useEffect(() => {
+    let previousTimestamp = performance.now();
+
     const interval = window.setInterval(() => {
-      setSimulation((current) => advanceSimulation(current, 1));
-    }, 1000);
-    return () => window.clearInterval(interval);
+      if (document.visibilityState !== 'visible') {
+        previousTimestamp = performance.now();
+        setRuntime((current) => ({
+          ...current,
+          runner: createFixedStepRunner(),
+        }));
+        return;
+      }
+
+      const timestamp = performance.now();
+      const elapsedMicroseconds = Math.max(
+        0,
+        Math.round((timestamp - previousTimestamp) * 1000),
+      );
+      previousTimestamp = timestamp;
+
+      setRuntime((current) => {
+        const result = pumpSimulation(
+          current.simulation,
+          current.runner,
+          elapsedMicroseconds,
+        );
+        return { runner: result.runner, simulation: result.simulation };
+      });
+    }, 50);
+
+    const resetAfterVisibilityChange = () => {
+      previousTimestamp = performance.now();
+      setRuntime((current) => ({
+        ...current,
+        runner: createFixedStepRunner(),
+      }));
+    };
+    document.addEventListener('visibilitychange', resetAfterVisibilityChange);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', resetAfterVisibilityChange);
+    };
   }, []);
 
   const topEvent = simulation.events.at(-1);
@@ -57,7 +100,13 @@ export const App = () => {
   );
 
   const chooseTimeMode = (mode: TimeMode) => {
-    setSimulation((current) => withTimeMode(current, mode));
+    setRuntime((current) => ({
+      ...current,
+      simulation: executeSimulationCommand(current.simulation, {
+        type: 'time-mode.set',
+        mode,
+      }).state,
+    }));
   };
 
   return (
@@ -72,7 +121,9 @@ export const App = () => {
         <section className="clock-panel" aria-label="Station time">
           <div>
             <span className="panel-kicker">Day {currentDayNumber(simulation)}</span>
-            <strong>{formatClock(simulation.absoluteMinute)}</strong>
+            <strong>
+              {formatClock(wholeMinuteForClockUnit(simulation.absoluteClockUnit))}
+            </strong>
           </div>
           <div className="phase-chip" data-phase={simulation.phase}>
             {phaseLabel[simulation.phase]}
@@ -86,7 +137,9 @@ export const App = () => {
                 title={
                   simulation.phase === 'night' && mode === 'paused'
                     ? 'Night cannot fully pause'
-                    : mode
+                    : simulation.phase === 'night' && mode === 'fast'
+                      ? 'Night caps fast mode at normal speed'
+                      : mode
                 }
                 type="button"
               >

@@ -1,5 +1,11 @@
-import { gameConfig } from '../../config/game';
-import { MINUTES_PER_DAY, phaseForMinuteOfDay, timeScaleForMode } from './clock';
+import {
+  CLOCK_UNITS_PER_MINUTE,
+  FIXED_STEP_TIME_UNITS,
+  MINUTES_PER_DAY,
+  phaseForClockUnit,
+  timeUnitsPerClockUnit,
+  wholeMinuteForClockUnit,
+} from './clock';
 import type {
   Resources,
   SimulationEvent,
@@ -8,20 +14,36 @@ import type {
   TimeMode,
 } from './types';
 
-const MINUTES_PER_REAL_SECOND = 3;
+const MAX_VISIBLE_EVENTS = 8;
 
 const phaseMessage = (
   phase: SimulationPhase,
 ): Omit<SimulationEvent, 'id' | 'minute'> => {
   switch (phase) {
     case 'morning':
-      return { message: 'Sunrise. The night report is ready.', tone: 'positive' };
+      return {
+        code: 'phase-entered-morning',
+        message: 'Sunrise. The night report is ready.',
+        tone: 'positive',
+      };
     case 'day':
-      return { message: 'Day operations resumed.', tone: 'neutral' };
+      return {
+        code: 'phase-entered-day',
+        message: 'Day operations resumed.',
+        tone: 'neutral',
+      };
     case 'dusk':
-      return { message: 'Dusk readiness window opened.', tone: 'warning' };
+      return {
+        code: 'phase-entered-dusk',
+        message: 'Dusk readiness window opened.',
+        tone: 'warning',
+      };
     case 'night':
-      return { message: 'Night attack conditions are active.', tone: 'warning' };
+      return {
+        code: 'phase-entered-night',
+        message: 'Night attack conditions are active.',
+        tone: 'warning',
+      };
   }
 };
 
@@ -54,8 +76,14 @@ const appendEvent = (
   minute: number,
   event: Omit<SimulationEvent, 'id' | 'minute'>,
 ): readonly SimulationEvent[] => {
-  const nextId = (events.at(-1)?.id ?? 0) + 1;
-  return [...events, { ...event, id: nextId, minute }].slice(-8);
+  const nextId = (events.at(-1)?.id ?? -1) + 1;
+  return [...events, { ...event, id: nextId, minute }].slice(-MAX_VISIBLE_EVENTS);
+};
+
+const assertNonNegativeSafeInteger = (value: number, name: string): void => {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new RangeError(`${name} must be a non-negative safe integer.`);
+  }
 };
 
 export const withTimeMode = (
@@ -67,21 +95,32 @@ export const withTimeMode = (
     state.phase === 'night' && requestedMode === 'paused' ? 'slow' : requestedMode,
 });
 
-export const advanceSimulationByMinutes = (
+export const advanceSimulationByClockUnits = (
   state: SimulationState,
-  wholeMinutes: number,
+  clockUnits: number,
 ): SimulationState => {
-  if (wholeMinutes <= 0 || state.isSliceComplete) return state;
+  assertNonNegativeSafeInteger(clockUnits, 'clockUnits');
+  if (clockUnits === 0 || state.isSliceComplete) return state;
 
   let next = state;
 
-  for (let offset = 0; offset < wholeMinutes; offset += 1) {
+  for (let offset = 0; offset < clockUnits; offset += 1) {
+    const absoluteClockUnit = next.absoluteClockUnit + 1;
+    if (!Number.isSafeInteger(absoluteClockUnit)) {
+      throw new RangeError('absoluteClockUnit exceeded the safe integer range.');
+    }
+
+    if (absoluteClockUnit % CLOCK_UNITS_PER_MINUTE !== 0) {
+      next = { ...next, absoluteClockUnit };
+      continue;
+    }
+
+    const absoluteMinute = wholeMinuteForClockUnit(absoluteClockUnit);
     const previousPhase = next.phase;
-    const absoluteMinute = next.absoluteMinute + 1;
-    const phase = phaseForMinuteOfDay(absoluteMinute);
+    const phase = phaseForClockUnit(absoluteClockUnit);
     const enteredMorning = previousPhase === 'night' && phase === 'morning';
     const completedNights = next.completedNights + (enteredMorning ? 1 : 0);
-    const isSliceComplete = completedNights >= gameConfig.verticalSliceNightCount;
+    const isSliceComplete = completedNights >= next.targetNightCount;
     let events = next.events;
     let resources = next.resources;
 
@@ -95,14 +134,15 @@ export const advanceSimulationByMinutes = (
 
     if (isSliceComplete && !next.isSliceComplete) {
       events = appendEvent(events, absoluteMinute, {
-        message: 'Three-night vertical slice complete.',
+        code: 'slice-completed',
+        message: `${String(next.targetNightCount)}-night vertical slice complete.`,
         tone: 'positive',
       });
     }
 
     next = {
       ...next,
-      absoluteMinute,
+      absoluteClockUnit,
       completedNights,
       events,
       isSliceComplete,
@@ -111,32 +151,67 @@ export const advanceSimulationByMinutes = (
       timeMode:
         phase === 'night' && next.timeMode === 'paused' ? 'slow' : next.timeMode,
     };
+
+    if (isSliceComplete) break;
   }
 
   return next;
 };
 
-export const advanceSimulation = (
-  state: SimulationState,
-  realSeconds: number,
-): SimulationState => {
-  if (realSeconds <= 0 || state.isSliceComplete) return state;
+export const advanceSimulationStep = (state: SimulationState): SimulationState => {
+  if (state.isSliceComplete) return state;
 
-  const timeScale = timeScaleForMode(state.timeMode, state.phase);
-  if (timeScale === 0) return state;
+  const initialUnitCost = timeUnitsPerClockUnit(state.timeMode, state.phase);
+  if (initialUnitCost === null) return state;
+  if (
+    !Number.isSafeInteger(state.clockStepRemainderTimeUnits) ||
+    state.clockStepRemainderTimeUnits < 0
+  ) {
+    throw new RangeError(
+      'clockStepRemainderTimeUnits must be a non-negative safe integer.',
+    );
+  }
+  if (!Number.isSafeInteger(state.tick + 1)) {
+    throw new RangeError('tick exceeded the safe integer range.');
+  }
 
-  const scaledMinutes =
-    state.minuteRemainder + realSeconds * MINUTES_PER_REAL_SECOND * timeScale;
-  const wholeMinutes = Math.floor(scaledMinutes);
-  const minuteRemainder = scaledMinutes - wholeMinutes;
+  let remainingTimeUnits = FIXED_STEP_TIME_UNITS + state.clockStepRemainderTimeUnits;
+  if (!Number.isSafeInteger(remainingTimeUnits)) {
+    throw new RangeError('clock step remainder exceeded the safe integer range.');
+  }
 
-  if (wholeMinutes === 0) return { ...state, minuteRemainder };
+  let next: SimulationState = { ...state, clockStepRemainderTimeUnits: 0 };
+
+  while (!next.isSliceComplete) {
+    const unitCost = timeUnitsPerClockUnit(next.timeMode, next.phase);
+    if (unitCost === null || remainingTimeUnits < unitCost) break;
+
+    next = advanceSimulationByClockUnits(next, 1);
+    remainingTimeUnits -= unitCost;
+  }
 
   return {
-    ...advanceSimulationByMinutes(state, wholeMinutes),
-    minuteRemainder,
+    ...next,
+    clockStepRemainderTimeUnits: next.isSliceComplete ? 0 : remainingTimeUnits,
+    tick: state.tick + 1,
   };
 };
 
+export const advanceSimulationSteps = (
+  state: SimulationState,
+  stepCount: number,
+): SimulationState => {
+  assertNonNegativeSafeInteger(stepCount, 'stepCount');
+  let next = state;
+
+  for (let step = 0; step < stepCount; step += 1) {
+    const advanced = advanceSimulationStep(next);
+    if (advanced === next) break;
+    next = advanced;
+  }
+
+  return next;
+};
+
 export const currentDayNumber = (state: SimulationState): number =>
-  Math.floor(state.absoluteMinute / MINUTES_PER_DAY) + 1;
+  Math.floor(wholeMinuteForClockUnit(state.absoluteClockUnit) / MINUTES_PER_DAY) + 1;

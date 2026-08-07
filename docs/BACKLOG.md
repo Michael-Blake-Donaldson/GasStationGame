@@ -8,13 +8,13 @@ This backlog implements the GDD milestone sequence. Priority is strict: finish a
 
 - [x] **GS-001 (P0): Establish repository quality gates.** Configure formatting, linting, strict type checking, unit tests, coverage, browser production build, and local CI workflow. Acceptance: root commands exist and pass on the initial checkpoint.
 - [x] **GS-002 (P0): Preserve design authority and autonomous workflow.** Retain the GDD under `docs/`, add repository guidance, durable tracking documents, and read-only project subagents. Acceptance: all required files exist and explicitly enforce one normal writer.
-- [~] **GS-003 (P0): Scaffold code-first browser/desktop clients.** React, direct Three.js, validated content, and Tauri 2 are configured without simulation/presentation coupling; the representative UI and browser build pass. Remaining acceptance: compile the desktop Rust shell with Rust 1.85+ (the local toolchain is 1.80).
+- [x] **GS-003 (P0): Scaffold code-first browser/desktop clients.** React, direct Three.js, validated content, and Tauri 2 are configured without simulation/presentation coupling; browser and Windows desktop production builds pass with the explicitly tested Rust 1.88 minimum.
 - [x] **GS-004 (P0): Make the player-facing title configurable.** Acceptance: visible title comes from `VITE_GAME_TITLE`; technical identifiers remain generic.
 - [ ] **GS-005 (P1): Add an offline-owned font and placeholder asset pipeline.** Acceptance: production presentation uses repository-owned, license-documented assets and does not require runtime network access.
 
 ## M1 — Simulation skeleton
 
-- [~] **GS-010 (P0): Implement fixed-tick phase clock.** Current scaffold covers basic day/dusk/night/morning transitions, daytime pause, night slow-time floor, and three-night completion. Remaining: fixed-step accumulator independent of UI timer cadence, commands, deterministic hashes, and boundary/property tests.
+- [x] **GS-010 (P0): Implement fixed-tick phase clock.** Acceptance: the integer 100 ms clock kernel preserves exact phase/resource boundaries, daytime pause, the nighttime slow-time floor and fast-time cap, and exact three-night completion; the browser accumulator is independent of callback cadence and retains capped catch-up debt; typed time commands, replay receipts, deterministic checkpoint hashes, and boundary/property tests pass.
 - [ ] **GS-011 (P0): Add typed command and domain-event buses.** Acceptance: UI submits typed commands; every authoritative change emits ordered, reason-coded events; rejected commands explain why.
 - [ ] **GS-012 (P0): Add seeded RNG and replay harness.** Acceptance: RNG state is serializable; identical seed plus command stream yields identical state hash and event ledger across repeated runs.
 - [ ] **GS-013 (P0): Implement station grid and occupancy.** Acceptance: authored facility plots and flexible-placement cells share deterministic coordinates; occupancy queries have unit/property coverage.

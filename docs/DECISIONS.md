@@ -52,3 +52,11 @@ Decisions are append-only. To change one, add a new decision that supersedes it 
 - **Context:** The slice excludes online services and should run as a self-contained Windows game.
 - **Decision:** Production runtime may not require web fonts, remote content, telemetry, accounts, or network services. Assets and saves are local. Any future external service requires separate authorization and a new decision.
 - **Consequences:** Placeholder fonts use system fallbacks until repository-owned licensed fonts are added. CSP and capabilities stay minimal.
+
+## DEC-007 — Use integer clock units and a fixed 100 ms engine step
+
+- **Date:** 2026-08-06
+- **Status:** Accepted
+- **Context:** Floating minute accumulation and one-second UI callbacks could produce drift, lose delayed time, apply one phase's speed across another phase, and continue beyond the third sunrise.
+- **Decision:** Authoritative time uses 40 integer clock units per simulation minute. Active simulation advances in fixed 100,000-microsecond engine steps: 3 units at slow speed, 12 at normal speed, and 48 at daytime fast speed. Night fast is effectively normal; night pause requests canonicalize to slow. The platform adapter owns elapsed-time debt and timestamps, never the simulation.
+- **Consequences:** Callback partitions converge to identical state, phase/hour boundaries remain exact, and replay commands can target stable ticks. Paused or hidden wall time creates no catch-up debt. Presentation interpolation and broader commands/events remain separate work.

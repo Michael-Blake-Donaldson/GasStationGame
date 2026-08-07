@@ -15,10 +15,9 @@ Last updated: 2026-08-06
 ### KI-002 — Simulation clock is not yet a replay-grade fixed-step engine
 
 - **Severity:** High
-- **Status:** Open
-- **Symptoms:** The prototype advances in integer minutes from a UI interval and does not preserve sub-minute accumulation or accept a command stream.
-- **Impact:** Timer jitter can change pacing; the determinism contract is not complete.
-- **Plan:** GS-010 and GS-012 add fixed ticks, accumulator, seeded RNG state, replay, and state hashing.
+- **Status:** Resolved 2026-08-06
+- **Resolution:** GS-010 replaced floating minute/UI cadence stepping with integer clock units, a fixed 100 ms active step, a debt-preserving browser accumulator, typed time commands, a clock replay fixture, and deterministic checkpoint hashing. Boundary, cadence-partition, long-run invariant, invalid-input, and exact-completion tests pass.
+- **Remaining boundary:** Scenario RNG and the general command/event ledger remain GS-011/012 work rather than clock defects.
 
 ### KI-003 — Save/load and recovery are not implemented
 
@@ -56,7 +55,7 @@ Last updated: 2026-08-06
 
 - **Severity:** Low
 - **Status:** Open
-- **Symptoms:** React, Tauri's title adapter, and the direct Three.js prototype currently produce one roughly 801 kB minified JavaScript asset (about 215 kB gzip).
+- **Symptoms:** React, Tauri's title adapter, the fixed-step simulation foundation, and the direct Three.js prototype currently produce one roughly 804 kB minified JavaScript asset (about 216 kB gzip).
 - **Impact:** Startup is acceptable for the scaffold but may grow without an asset/scene loading boundary.
 - **Plan:** Measure startup and target scenes in GS-056, then split by actual loading phases rather than speculative package boundaries. Vite's advisory threshold is temporarily 850 kB so this known baseline does not appear as an unexplained build warning.
 
@@ -66,6 +65,14 @@ Last updated: 2026-08-06
 - **Status:** Resolved 2026-08-06
 - **Resolution:** Updated the stable MSVC toolchain from Rust/Cargo 1.80 to 1.97.1. Rust formatting, Clippy with denied warnings, Cargo tests/check, the optimized desktop build, WebView2 startup, and local NSIS packaging now pass.
 - **Prevention:** Keep the explicitly tested `rust-version = "1.88"` minimum, preserve `Cargo.lock`, and run `pnpm verify:all` after desktop dependency changes. CI checks both the declared minimum and current stable. The repository does not change global toolchains automatically.
+
+### KI-009 — Replay and event history are clock-only
+
+- **Severity:** High / P0 roadmap gap
+- **Status:** Open
+- **Symptoms:** The GS-010 replay fixture accepts only time-mode commands. The UI keeps a bounded eight-event projection, while the replay result can collect the complete clock-event sequence for its run.
+- **Impact:** Gameplay commands, rejection causes, resource reasons, save recovery, and morning-report reconciliation cannot yet use an authoritative ledger.
+- **Plan:** GS-011 introduces the general typed command and reason-coded event bus; GS-012 adds seeded scenario replay and stronger equality fixtures; GS-035 derives reports from that ledger.
 
 ## Product and design risks
 
