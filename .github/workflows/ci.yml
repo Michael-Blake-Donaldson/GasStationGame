@@ -21,9 +21,15 @@ jobs:
         run: corepack enable
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Verify source and web production build
-        run: pnpm verify
-      - name: Verify Rust formatting
-        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
-      - name: Verify desktop Rust shell
-        run: cargo check --manifest-path src-tauri/Cargo.toml --locked
+      - name: Run complete source and production gate
+        run: pnpm verify:all
+
+  rust-msrv:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install declared minimum Rust toolchain
+        run: rustup toolchain install 1.88.0-x86_64-pc-windows-msvc --profile minimal
+      - name: Check desktop shell against declared minimum Rust
+        run: cargo +1.88.0-x86_64-pc-windows-msvc check --manifest-path src-tauri/Cargo.toml --locked

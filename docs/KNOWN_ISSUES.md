@@ -63,10 +63,9 @@ Last updated: 2026-08-06
 ### KI-008 — Local Rust toolchain is too old for the resolved desktop dependencies
 
 - **Severity:** Medium / environment blocker
-- **Status:** Open
-- **Symptoms:** The machine has Rust/Cargo 1.80; current Tauri dependencies resolve crates using Edition 2024 metadata, which Cargo 1.80 cannot parse.
-- **Impact:** `cargo check` and `pnpm build:desktop` cannot complete locally, although the Tauri manifest, lockfile, Rust formatting, and web build are available.
-- **Required action:** Install or select Rust 1.85 or newer with separate authorization, then run `pnpm check:desktop` and `pnpm build:desktop`. The repository does not change global toolchains automatically.
+- **Status:** Resolved 2026-08-06
+- **Resolution:** Updated the stable MSVC toolchain from Rust/Cargo 1.80 to 1.97.1. Rust formatting, Clippy with denied warnings, Cargo tests/check, the optimized desktop build, WebView2 startup, and local NSIS packaging now pass.
+- **Prevention:** Keep the explicitly tested `rust-version = "1.88"` minimum, preserve `Cargo.lock`, and run `pnpm verify:all` after desktop dependency changes. CI checks both the declared minimum and current stable. The repository does not change global toolchains automatically.
 
 ## Product and design risks
 
@@ -101,5 +100,5 @@ Campaign regions, romance breadth, advanced expeditions, factions, controller, o
 ## Environment risks
 
 - The repository is in OneDrive. File syncing can lock high-churn generated output. `node_modules`, `dist`, coverage, and Rust targets are ignored; retry safe commands if a lock occurs.
-- Local Rust is 1.80. Tauri dependency updates may raise the minimum supported compiler; keep the resolved lockfile and record toolchain changes.
+- Local Rust is 1.97.1 on the stable `x86_64-pc-windows-msvc` toolchain. Tauri dependency updates may raise the declared minimum; keep the resolved lockfile and record toolchain changes.
 - Windows WebView2 version differences may affect WebGL behavior. Packaged smoke tests must record OS/GPU/WebView2 context.

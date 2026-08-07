@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Generic gas station game app icon">
+  <rect width="512" height="512" rx="112" fill="#17212b"/>
+  <path d="M126 407V119c0-21 17-38 38-38h143c21 0 38 17 38 38v288" fill="#e7d7b0"/>
+  <rect x="164" y="121" width="143" height="112" rx="15" fill="#69a7a4"/>
+  <path d="M345 168h28c20 0 36 16 36 36v130c0 22 18 40 40 40h4" fill="none" stroke="#e7d7b0" stroke-linecap="round" stroke-width="26"/>
+  <path d="M385 150l45 44" fill="none" stroke="#e7d7b0" stroke-linecap="round" stroke-width="24"/>
+  <path d="M96 407h294" fill="none" stroke="#d77443" stroke-linecap="round" stroke-width="32"/>
+  <circle cx="236" cy="310" r="39" fill="#d77443"/>
+</svg>

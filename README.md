@@ -22,12 +22,14 @@ This is not yet a playable vertical slice. See [docs/BACKLOG.md](docs/BACKLOG.md
 
 - Node.js 24 or newer
 - pnpm 11 or newer
-- Rust 1.85 or newer for the desktop shell (Edition 2024 dependency support)
+- Rust 1.88 or newer using the `x86_64-pc-windows-msvc` target; `rust-toolchain.toml` selects stable Rust with rustfmt and Clippy
+- Visual Studio 2022 Build Tools or Community with Desktop development with C++ (MSVC and a Windows SDK)
 - Windows WebView2 for running the Tauri desktop application
 
 ## Setup and commands
 
 ```powershell
+rustup show
 pnpm install --frozen-lockfile
 pnpm dev
 ```
@@ -41,15 +43,18 @@ pnpm typecheck
 pnpm test
 pnpm test:coverage
 pnpm build
+pnpm lint:rust
+pnpm test:rust
 pnpm build:desktop
 pnpm verify
+pnpm verify:all
 ```
 
-`pnpm build:desktop` creates a release executable without an installer. A distributable NSIS bundle remains configured in `src-tauri/tauri.conf.json` for an explicitly authorized release workflow.
+`pnpm build:desktop` creates a release executable without an installer. `pnpm build:installer` creates a local NSIS installer when packaging is explicitly in scope; it does not publish or install the application.
 
 ## Configuration
 
-Copy `.env.example` to `.env.local` and change `VITE_GAME_TITLE` to alter the visible working title. The browser document, Tauri window, and desktop build product name use this value. Do not derive package names, Rust crate names, save keys, schema identifiers, bundle identifiers, or filenames from the player-facing title.
+Copy `.env.example` to `.env.local` and change `VITE_GAME_TITLE` to alter the visible working title. The browser document, Tauri window, desktop product name, and human-facing installer filename use this value. Do not derive persistent technical identifiers—such as package names, Rust crate names, save keys, schema identifiers, bundle identifiers, or internal paths—from the player-facing title.
 
 ## Source of truth
 

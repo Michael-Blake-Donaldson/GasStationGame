@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Desktop shell for the Gas Station Game prototype"
 authors = ["Gas Station Game contributors"]
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.88"
 
 [lib]
 name = "gas_station_game_lib"
