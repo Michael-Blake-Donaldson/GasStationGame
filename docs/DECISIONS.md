@@ -108,3 +108,11 @@ Decisions are append-only. To change one, add a new decision that supersedes it 
 - **Context:** Day staffing and night reassignment need visible travel cost, reproducible routes, explainable rejection, and persistence-safe progress without coupling navigation to the renderer.
 - **Decision:** Define initial employee positions, jobs, work subjects, interaction cells, and work durations in validated scenario data. Model employee activity as idle, traveling, or working. Use canonical four-way breadth-first search with structural occupancy as blockers, employees as non-blocking agents, and fixed tie-breaking. Advance travel and work only through authoritative integer clock units; route all assignment/cancellation through typed commands and lifecycle events.
 - **Consequences:** Scenario definition/replay advance to version 3 and checkpoints to version 5. Active routes and work progress are serializable and validated against scenario context. Reassignment preserves current position and incurs a fresh route. Skills, fatigue, job outputs, crowd avoidance, animation, and player-facing assignment UI remain explicit later work.
+
+## DEC-014 — Separate save compatibility from simulation and content compatibility
+
+- **Date:** 2026-08-07
+- **Status:** Accepted
+- **Context:** Local saves must survive controlled schema evolution without treating replay/checkpoint diagnostics as player saves or coupling persistence to UI, filesystem, or the temporary title.
+- **Decision:** Use canonical generic save format `station-campaign-save` version 1. Keep save schema, campaign schema, checkpoint, scenario/grid content, RNG, settings, and difficulty versions explicit and independent. Separate campaign, current station, and session command cursor. Validate untrusted JSON structurally and causally before exposing state; include FNV-1a corruption checksum and monotonic recovery sequence, while reserving physical rotation/atomic storage for GS-016.
+- **Consequences:** Exact day/dusk/night/morning and mid-action continuation are migration fixtures. Unknown versions reject rather than best-effort load; RNG is never reconstructed from seed; future migrations are pure sequential steps with retained fixtures. The checksum detects ordinary corruption but is not an authenticity or security mechanism. Player-facing title changes never migrate saves.

@@ -125,10 +125,7 @@ describe('simulation checkpoint hash', () => {
 
   it('changes when authoritative resources change', () => {
     const initial = createInitialState();
-    const changed = {
-      ...initial,
-      resources: { ...initial.resources, fuel: initial.resources.fuel - 1 },
-    };
+    const changed = advanceSimulationByClockUnits(initial, 60 * CLOCK_UNITS_PER_MINUTE);
 
     expect(hashSimulationState(changed)).not.toBe(hashSimulationState(initial));
   });
@@ -301,6 +298,7 @@ describe('simulation checkpoint hash', () => {
           ? { ...event, targetNightCount: event.targetNightCount + 1 }
           : event,
       ),
+      targetNightCount: initial.targetNightCount + 1,
     };
     const partialStep = { ...initial, clockStepRemainderTimeUnits: 1 };
 

@@ -82,7 +82,7 @@ GS-013 adds a zero-based 32×24 station grid whose `x` coordinate increases east
 
 GS-014 places all four employees through validated scenario data and represents activity as `idle`, `traveling`, or `working`. Jobs reference work targets, which reference an occupant or authored plot and declare walkable cardinally adjacent interaction cells. Breadth-first search uses structural occupancy as blockers, permits employees to share/pass through cells, and resolves equal paths by north/west/east/south neighbor order plus row-major destination order. A path excludes its start and includes its destination. Travel consumes exactly 20 authoritative clock units per cell; work consumes its authored duration one clock unit at a time. Reassignment is explicit cancellation followed by a new assignment, so current position and travel cost are preserved. Skills, fatigue, job outputs, and presentation controls remain later systems.
 
-Checkpoint version 5 includes scenario identity, complete RNG continuation state, canonical station occupancy, workforce positions and activities, the full ledger, and sequence cursor; it canonicalizes object keys, preserves semantic array order, and excludes presentation copy. Checkpoint creation validates active job references, route bounds/blocking/continuity/cursor, interaction destinations, durations, and assignment uniqueness against the injected scenario context. Checkpoints and replays are deterministic diagnostics, not yet the validated save-file format introduced by GS-015.
+Checkpoint version 5 includes scenario identity, complete RNG continuation state, canonical station occupancy, workforce positions and activities, the full ledger, and sequence cursor; it canonicalizes object keys, preserves semantic array order, and excludes presentation copy. Checkpoint creation validates active job references, route bounds/blocking/continuity/cursor, interaction destinations, durations, and assignment uniqueness against the injected scenario context. Checkpoints and replays remain deterministic diagnostics; save schema v1 embeds checkpoint v5 behind its own strict compatibility and semantic load boundary.
 
 ## Content model
 
@@ -104,18 +104,11 @@ Renderer selection is provisional. Measure target-scale lighting, instancing, se
 
 ## Persistence
 
-Persistence is not implemented yet. The first schema must include:
+GS-015 defines canonical UTF-8 JSON save schema v1 under the generic `station-campaign-save` format ID. The envelope separates minimal campaign progress, checkpoint-v5 station state, the next runtime command sequence, versioned settings/difficulty namespaces, explicit scenario/grid/RNG compatibility, and recovery metadata. Set-like campaign IDs are unique and lexical; event, path, and RNG arrays retain semantic order. Player-facing title, UI/modal state, rendering objects, wall-clock timestamps, runner debt, receipts, and localized event prose are excluded.
 
-- explicit save format and content version;
-- separate campaign and current-station state;
-- authoritative simulation state and tick;
-- RNG state;
-- ordered event-sequence position;
-- settings and difficulty;
-- stable content IDs;
-- checksum/recovery metadata.
+Encoding snapshots and validates without mutating live state. Loading is all-or-nothing: header dispatch rejects unknown formats/versions, strict Zod schemas reject missing/extra/malformed fields, the FNV-1a checksum detects ordinary corruption, and semantic validation reconciles phase/night boundaries, scheduled resources, time-mode history, clock-exact job lifecycles/progress, workforce, occupancy, RNG, and the full ledger before returning fresh state. Version 1 caps a persisted scenario at 32 nights—above a full 21-night chapter—and bounds the corresponding clock before any history walk, preventing attacker-controlled numeric horizons from creating unbounded validation work. Checksums are corruption signals, not security boundaries. Future save-schema migrations must be pure sequential version steps with retained fixtures; content and RNG compatibility require explicit migration/support rather than best-effort reseeding.
 
-Autosaves occur at morning, dusk, and major choices. Rotating slots must recover from a corrupt newest save. Save/load boundaries must not change deterministic outcomes.
+GS-016 owns physical local storage, atomic replacement, morning/dusk/major-choice autosave triggers, rotating slots, and selecting the newest valid recovery candidate. A failed decode cannot expose partial state, and a successful runtime adoption must reset non-authoritative runner debt while preserving the saved command cursor.
 
 ## Platform and security
 

@@ -1,8 +1,8 @@
-import { assertSeededRandomState } from './random';
-import { assertStationOccupancySnapshot, type PlacedOccupant } from './grid';
-import { assertWorkforceState } from './jobs';
+import type { PlacedOccupant } from './grid';
+import { hashCanonicalJson } from '../serialization/canonicalJson';
 import type { SimulationContext } from './scenario';
 import type { DomainEvent, Employee, SimulationState } from './types';
+import { assertSimulationState } from './validation';
 
 export const SIMULATION_CHECKPOINT_VERSION = 5;
 
@@ -56,12 +56,10 @@ export const createSimulationCheckpoint = (
   state: SimulationState,
   context: SimulationContext,
 ) => {
-  assertSeededRandomState(state.rng);
-  assertStationOccupancySnapshot(state.stationOccupancy);
-  assertWorkforceState(context, state);
+  assertSimulationState(context, state);
 
   return {
-    version: SIMULATION_CHECKPOINT_VERSION,
+    version: SIMULATION_CHECKPOINT_VERSION as typeof SIMULATION_CHECKPOINT_VERSION,
     absoluteClockUnit: state.absoluteClockUnit,
     clockStepRemainderTimeUnits: state.clockStepRemainderTimeUnits,
     completedNights: state.completedNights,
@@ -102,41 +100,12 @@ export const createSimulationCheckpoint = (
   };
 };
 
-const canonicalize = (value: unknown): unknown => {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
-    return value;
-  }
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value))
-      throw new RangeError('Cannot hash non-finite numbers.');
-    return value;
-  }
-  if (Array.isArray(value)) return value.map((item) => canonicalize(item));
-  if (typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>).sort(
-      ([left], [right]) => (left < right ? -1 : left > right ? 1 : 0),
-    );
-    return Object.fromEntries(entries.map(([key, item]) => [key, canonicalize(item)]));
-  }
-  throw new RangeError(`Cannot hash value of type ${typeof value}.`);
-};
-
-const fnv1a = (value: string): string => {
-  let hash = 0x811c9dc5;
-
-  for (const byte of new TextEncoder().encode(value)) {
-    hash ^= byte;
-    hash = Math.imul(hash, 0x01000193);
-  }
-
-  return (hash >>> 0).toString(16).padStart(8, '0');
-};
+export type SimulationCheckpointV5 = ReturnType<typeof createSimulationCheckpoint>;
 
 export const hashSimulationState = (
   state: SimulationState,
   context: SimulationContext,
-): string =>
-  fnv1a(JSON.stringify(canonicalize(createSimulationCheckpoint(state, context))));
+): string => hashCanonicalJson(createSimulationCheckpoint(state, context));
 
 export const hashDomainEventLedger = (eventLedger: readonly DomainEvent[]): string =>
-  fnv1a(JSON.stringify(canonicalize(eventLedger)));
+  hashCanonicalJson(eventLedger);

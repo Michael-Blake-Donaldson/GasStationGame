@@ -26,7 +26,7 @@ const RESOURCE_ORDER: readonly ResourceKey[] = [
   'scrap',
 ];
 
-const resourceRequestsForPhase = (
+export const resourceRequestsForPhase = (
   phase: SimulationPhase,
 ): Partial<Record<ResourceKey, number>> => {
   if (phase === 'day') return { cash: 12, food: -1, fuel: -2 };
@@ -34,7 +34,7 @@ const resourceRequestsForPhase = (
   return {};
 };
 
-const applyHourlyFlow = (
+export const applyHourlyFlow = (
   resources: Readonly<Resources>,
   phase: SimulationPhase,
 ): { changes: readonly ResourceChange[]; resources: Resources } => {

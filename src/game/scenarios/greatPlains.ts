@@ -7,6 +7,11 @@ import {
 import { createInitialState as createSimulationInitialState } from '../simulation/createInitialState';
 import { assertScenarioDefinition } from '../simulation/jobs';
 import {
+  decodeGameSave as decodeSave,
+  encodeGameSave as encodeSave,
+  type GameSaveSnapshot,
+} from '../persistence/saveCodec';
+import {
   runClockReplay as runSimulationClockReplay,
   runScenarioReplay as runSimulationScenarioReplay,
   type ClockReplayV1,
@@ -44,6 +49,10 @@ export const greatPlainsScenario = {
 export const greatPlainsSimulationContext = {
   scenario: greatPlainsScenario,
 } satisfies SimulationContext;
+export const greatPlainsSaveContext = {
+  knownRegionIds: [GREAT_PLAINS_SCENARIO_ID],
+  simulation: greatPlainsSimulationContext,
+} as const;
 
 assertScenarioDefinition(greatPlainsScenario);
 
@@ -60,6 +69,12 @@ export const createSimulationCheckpoint = (state: SimulationState) =>
 
 export const hashSimulationState = (state: SimulationState) =>
   hashState(state, greatPlainsSimulationContext);
+
+export const encodeGameSave = (snapshot: GameSaveSnapshot) =>
+  encodeSave(snapshot, greatPlainsSaveContext);
+
+export const decodeGameSave = (serialized: string) =>
+  decodeSave(serialized, greatPlainsSaveContext);
 
 export const runScenarioReplay = (replay: ScenarioReplayV3) =>
   runSimulationScenarioReplay(replay, greatPlainsSimulationContext);

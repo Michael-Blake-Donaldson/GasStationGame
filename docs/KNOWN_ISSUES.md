@@ -19,12 +19,13 @@ Last updated: 2026-08-07
 - **Resolution:** GS-010 replaced floating minute/UI cadence stepping with integer clock units, a fixed 100 ms active step, a debt-preserving browser accumulator, typed time commands, a clock replay fixture, and deterministic checkpoint hashing. Boundary, cadence-partition, long-run invariant, invalid-input, and exact-completion tests pass.
 - **Remaining boundary:** GS-012 now supplies versioned serializable RNG and scenario-level replay. Save/load continuation and migration remain GS-015/016 work rather than clock defects.
 
-### KI-003 — Save/load and recovery are not implemented
+### KI-003 — Physical save storage and recovery rotation are not implemented
 
 - **Severity:** High
 - **Status:** Open
-- **Impact:** Autosave, campaign/station separation, migration, corruption recovery, and resumed-run equality cannot be verified.
-- **Plan:** GS-015 and GS-016 before expanding simulation state materially.
+- **Impact:** The validated schema/codec can round-trip and continue authoritative state, but players cannot yet create, enumerate, load, or recover local slots through the application.
+- **Progress:** GS-015 added save schema v1, separate campaign/station/session state, content compatibility, checksum/save sequence metadata, a frozen migration fixture, strict causal validation, and deterministic resumed-run equality.
+- **Plan:** GS-016 adds the local storage adapter, atomic writes, rotating autosave slots, and newest-valid recovery selection without weakening the pure codec.
 
 ### KI-004 — Renderer choice has not passed the performance/readability prototype
 
@@ -55,7 +56,7 @@ Last updated: 2026-08-07
 
 - **Severity:** Low
 - **Status:** Open
-- **Symptoms:** React, Tauri's title adapter, the deterministic simulation foundation, and the direct Three.js prototype currently produce one 842.31 kB minified JavaScript asset (226.49 kB gzip).
+- **Symptoms:** React, Tauri's title adapter, the deterministic simulation/persistence foundation, and the direct Three.js prototype currently produce one 849.34 kB minified JavaScript asset (228.28 kB gzip).
 - **Impact:** Startup is acceptable for the scaffold but may grow without an asset/scene loading boundary.
 - **Plan:** Measure startup and target scenes in GS-056, then split by actual loading phases rather than speculative package boundaries. Vite's advisory threshold is temporarily 850 kB so this known baseline does not appear as an unexplained build warning.
 

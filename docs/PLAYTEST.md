@@ -22,7 +22,7 @@ Do not run formal slice sessions until:
 
 Record:
 
-- build commit and save schema version;
+- build commit, save schema/checkpoint version, checksum algorithm, and recovery sequence;
 - scenario/content version and seed;
 - machine, resolution, display scaling, input devices, OS/GPU/WebView2;
 - difficulty/accessibility settings;

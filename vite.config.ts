@@ -23,7 +23,13 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
-      include: ['src/game/simulation/**/*.ts', 'src/content/**/*.ts'],
+      include: [
+        'src/game/campaign/**/*.ts',
+        'src/game/persistence/**/*.ts',
+        'src/game/serialization/**/*.ts',
+        'src/game/simulation/**/*.ts',
+        'src/content/**/*.ts',
+      ],
       thresholds: {
         lines: 85,
         functions: 85,
