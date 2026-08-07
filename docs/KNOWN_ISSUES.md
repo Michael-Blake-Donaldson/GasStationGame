@@ -55,7 +55,7 @@ Last updated: 2026-08-07
 
 - **Severity:** Low
 - **Status:** Open
-- **Symptoms:** React, Tauri's title adapter, the deterministic simulation foundation, and the direct Three.js prototype currently produce one roughly 810 kB minified JavaScript asset (about 217 kB gzip).
+- **Symptoms:** React, Tauri's title adapter, the deterministic simulation foundation, and the direct Three.js prototype currently produce one 815.49 kB minified JavaScript asset (218.98 kB gzip).
 - **Impact:** Startup is acceptable for the scaffold but may grow without an asset/scene loading boundary.
 - **Plan:** Measure startup and target scenes in GS-056, then split by actual loading phases rather than speculative package boundaries. Vite's advisory threshold is temporarily 850 kB so this known baseline does not appear as an unexplained build warning.
 
@@ -76,10 +76,9 @@ Last updated: 2026-08-07
 ### KI-010 — Current presentation is fixed-size and lacks reusable modal structure
 
 - **Severity:** Medium / user-prioritized foundation gap
-- **Status:** Open
-- **Symptoms:** The current 1024×720 shell uses very small labels and clipping-prone fixed layout; `App.tsx` combines runtime orchestration with all HUD composition; time controls, fatigue, preview panels, dusk, and Beacon state need stronger semantics and world/HUD consistency. No reusable dialog or drawer owns keyboard/focus policy.
-- **Impact:** Adding grid, jobs, reports, dialogue, and scaled desktop UI now would compound a monolith and make later visual polish more expensive.
-- **Plan:** Complete GS-005, then GS-017/018 immediately after GS-012. Establish owned fonts, responsive tokens/layout, accessible controls/dialog/drawer primitives, phase/Beacon-consistent rendering, reduced-motion handling, honest preview labels, and deterministic screenshot fixtures. Defer real grid/jobs/power/threat/report/dialogue content to its owning system.
+- **Status:** Resolved 2026-08-07
+- **Resolution:** GS-017 removed the fixed minimum viewport, introduced deliberate desktop/tablet/mobile composition, raised readable label sizing, extracted the browser simulation runtime from `App`, added semantic meters and grouped pressed-state time controls, and established one accessible dialog/drawer primitive used by the station guide and authoritative event log. Focus containment/return, inert background, Escape, backdrop dismissal, body-scroll restoration, and 320–1920 px layouts are verified.
+- **Remaining boundary:** GS-005 still owns licensed repository typography. GS-018 owns deterministic phase/Beacon visual fixtures and Three.js consistency; GS-054 remains the representative-art gate.
 
 ## Product and design risks
 

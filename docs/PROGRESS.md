@@ -4,7 +4,7 @@ Last updated: 2026-08-07
 
 ## Current milestone
 
-**M1 — Simulation skeleton:** GS-010 fixed-step time, GS-011 typed commands/events, and GS-012 seeded RNG/scenario replay are verified. The user-prioritized presentation foundation is next, followed by grid, jobs, and saves.
+**M1 — Simulation skeleton:** GS-010 fixed-step time, GS-011 typed commands/events, GS-012 seeded RNG/scenario replay, and GS-017 responsive presentation/modal foundations are verified. Graphics/readability work is active next, followed by grid, jobs, and saves.
 
 The repository has moved from a GDD-only state to a code-first project foundation with its first replay-grade simulation subsystem. The vertical slice is not yet playable.
 
@@ -27,25 +27,27 @@ The repository has moved from a GDD-only state to a code-first project foundatio
 - Completed GS-012 with project-owned xoshiro128** randomness, full safe-integer seed expansion, versioned JSON-native RNG continuation state, unbiased bounded integer/index/choice/ratio draws, and a simulation-scoped lint ban on `Math.random()`.
 - Added scenario replay metadata for scenario/RNG/replay versions, checkpoint schema v3, scenario identity in state and the start event, independent state/ledger hashes, explicit replay stop reasons and command consumption, a GS-010 compatibility adapter, detached checkpoint ledger snapshots, golden/reference vectors, and repeat/divergence/serialization/validation tests.
 - Audited the current visual/UI scaffold and promoted GS-017/018 directly after GS-012: owned fonts, responsive panel/modal primitives, accessible focus/keyboard behavior, phase/Beacon-consistent graphics, reduced-motion support, and deterministic screenshot fixtures—without claiming final art or unimplemented gameplay.
+- Completed GS-017 with a responsive desktop/mobile composition, readable minimum text sizing, semantic meters and grouped pressed time controls, extracted simulation runtime adapter, reusable accessible dialog/drawer primitive, station guide, and newest-first authoritative event-history drawer.
+- Verified background inertness, focus containment/return, Escape, reverse/forward Tab wrapping, backdrop dismissal, body scroll restoration, narrow layout ordering, and breakpoint behavior. Browser audits at 1180, 900, 660, and 320 px found no page-level horizontal overflow or visible text below 10 px.
 
 ## Verified evidence
 
-| Check                            | Result | Evidence                                                                                                                                                               |
-| -------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GDD preserved                    | Pass   | Git recognizes the byte-identical file move under `docs/`                                                                                                              |
-| Formatting                       | Pass   | `pnpm format:check`                                                                                                                                                    |
-| Lint                             | Pass   | `pnpm lint --max-warnings=0`                                                                                                                                           |
-| Type checking                    | Pass   | `pnpm typecheck`                                                                                                                                                       |
-| Unit tests                       | Pass   | 156/156 tests across 10 files with `pnpm test`, including RNG vectors/continuation, scenario replay, commands/events, accessibility, and React Strict Mode integration |
-| Coverage                         | Pass   | 100% functions, 97.03% lines, 96.36% statements, and 93.88% branches for targeted simulation/content modules                                                           |
-| Browser production build         | Pass   | `pnpm build`; one JS asset, 810.42 kB minified / 217.19 kB gzip                                                                                                        |
-| Desktop manifest/Rust formatting | Pass   | `cargo metadata --no-deps` and `cargo fmt --check`                                                                                                                     |
-| Desktop Rust shell               | Pass   | Rust/Cargo 1.97.1 MSVC; rustfmt, Clippy with denied warnings, Cargo tests, and `cargo check --locked`                                                                  |
-| Declared Rust minimum            | Pass   | Rust/Cargo 1.88.0 MSVC completes `cargo check --locked`; CI verifies this MSRV separately                                                                              |
-| Desktop release executable       | Pass   | `pnpm build:desktop`; optimized Windows executable built and remained healthy in an 8-second WebView2 smoke test                                                       |
-| Local NSIS packaging             | Pass   | `pnpm build:installer`; local x64 installer produced without publishing or installing it                                                                               |
-| Configurable desktop title       | Pass   | A `Prairie Signal` test build embedded that product name and exposed the same live window title                                                                        |
-| Visual smoke review              | Pass   | Local browser at 1440×900, 1024×720, and 1280×720 night; no overflow or console warnings                                                                               |
+| Check                            | Result | Evidence                                                                                                                                                       |
+| -------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GDD preserved                    | Pass   | Git recognizes the byte-identical file move under `docs/`                                                                                                      |
+| Formatting                       | Pass   | `pnpm format:check`                                                                                                                                            |
+| Lint                             | Pass   | `pnpm lint --max-warnings=0`                                                                                                                                   |
+| Type checking                    | Pass   | `pnpm typecheck`                                                                                                                                               |
+| Unit tests                       | Pass   | 160/160 tests across 11 files with `pnpm test`, including RNG/replay, commands/events, modal focus/dismissal, accessibility, and React Strict Mode integration |
+| Coverage                         | Pass   | 100% functions, 97.03% lines, 96.36% statements, and 93.88% branches for targeted simulation/content modules                                                   |
+| Browser production build         | Pass   | `pnpm build`; one JS asset, 815.49 kB minified / 218.98 kB gzip                                                                                                |
+| Desktop manifest/Rust formatting | Pass   | `cargo metadata --no-deps` and `cargo fmt --check`                                                                                                             |
+| Desktop Rust shell               | Pass   | Rust/Cargo 1.97.1 MSVC; rustfmt, Clippy with denied warnings, Cargo tests, and `cargo check --locked`                                                          |
+| Declared Rust minimum            | Pass   | Rust/Cargo 1.88.0 MSVC completes `cargo check --locked`; CI verifies this MSRV separately                                                                      |
+| Desktop release executable       | Pass   | `pnpm build:desktop`; optimized Windows executable built and remained healthy in an 8-second WebView2 smoke test                                               |
+| Local NSIS packaging             | Pass   | `pnpm build:installer`; local x64 installer produced without publishing or installing it                                                                       |
+| Configurable desktop title       | Pass   | A `Prairie Signal` test build embedded that product name and exposed the same live window title                                                                |
+| Visual smoke review              | Pass   | Local browser desktop, modal, drawer, and breakpoint matrix at 1440, 1180, 1024, 900, 660, 390, and 320 px; no page overflow or sub-10 px visible text         |
 
 ## Honest capability boundary
 
@@ -53,7 +55,7 @@ The current screen is a presentation and architecture scaffold driven by a real 
 
 ## Next work
 
-1. Complete the repository-owned font prerequisite and responsive presentation/modal foundation (GS-005/017).
-2. Establish phase/Beacon-consistent graphics and deterministic visual baselines (GS-018).
+1. Establish phase/Beacon-consistent graphics and deterministic visual fixtures (GS-018).
+2. Add repository-owned, license-documented typography when external asset acquisition is separately authorized (GS-005).
 3. Add station grid/occupancy and deterministic movement (GS-013–014).
 4. Design versioned save/load before simulation state grows (GS-015).

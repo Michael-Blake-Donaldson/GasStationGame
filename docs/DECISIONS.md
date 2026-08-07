@@ -76,3 +76,11 @@ Decisions are append-only. To change one, add a new decision that supersedes it 
 - **Context:** Generated employees, travelers, threats, weather, loot, and combat must reproduce under tests and resume without reconstructing current random state from a seed.
 - **Decision:** Use a project-owned xoshiro128** generator identified as `xoshiro128ss` version 1. Its JSON-native state contains four unsigned 32-bit words and a safe-integer raw draw count. Seed expansion consumes the complete existing non-negative safe-integer seed and zero gameplay draws. Pure draw functions return replacement state; bounded integers use rejection sampling, and simulation code may not call `Math.random()`.
 - **Consequences:** The algorithm, seed expansion, output transform, state transition, rejection behavior, and draw-consumption rules are persistence/replay ABI. Any change requires a new RNG version and explicit migration or rejection policy. Checkpoint version 3 includes RNG and scenario identity. Raw draws are mechanical substrate and do not emit events; the authoritative outcome selected by a future random system must emit an explainable domain event.
+
+## DEC-010 — Share overlay policy and isolate the browser runtime adapter
+
+- **Date:** 2026-08-07
+- **Status:** Accepted
+- **Context:** Grid, jobs, reports, and dialogue will add panels and overlays; duplicating focus and cadence behavior inside `App` would make those systems fragile.
+- **Decision:** Keep `App` as a presentation composition root. Isolate wall-clock cadence plus typed UI-command dispatch in `game/runtime`, and route dialogs/drawers through one portal primitive that owns background inertness, focus containment/return, Escape, backdrop dismissal, scroll locking, and narrow-screen sheet behavior. Event history remains a projection of the authoritative ledger.
+- **Consequences:** New overlays inherit one accessibility policy and cannot become alternate authoritative state. Presentation-specific open/closed state stays outside simulation and replay. Representative content may reuse the primitive, but each workflow still needs its own semantic and visual review.

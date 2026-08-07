@@ -15,11 +15,13 @@ The architecture must support a deterministic, explainable station simulation; a
 ├── docs/                    # GDD and durable production records
 ├── scripts/                 # Reproducible build orchestration
 ├── src/
+│   ├── components/          # Reusable accessible presentation primitives
 │   ├── config/              # Player-facing metadata and composition settings
 │   ├── content/             # Validated content schemas and Great Plains data
 │   ├── game/
 │   │   ├── presentation/    # Domain-event selectors and player-facing copy
 │   │   ├── rendering/       # Three.js projection; no domain authority
+│   │   ├── runtime/         # Browser cadence and typed UI command adapter
 │   │   └── simulation/      # Pure domain state, clock, and transitions
 │   ├── test/                # Shared test setup
 │   ├── App.tsx              # Current UI/composition root
@@ -89,7 +91,7 @@ Three.js owns scene projection, camera, lighting, meshes, particles, picking, ov
 
 React owns panels, alerts, dialogue, settings, focus, and transient selection affordances. UI sends commands instead of changing simulation objects. Critical state uses text/shape plus color and remains readable without decorative CRT interference.
 
-GS-017 is scheduled before grid work to separate runtime orchestration from reusable HUD/panel primitives and establish accessible dialog/drawer behavior, responsive UI scaling, semantic controls, and honest prototype labels. GS-018 then aligns day/dusk/night and Beacon presentation between DOM and Three.js and records deterministic visual fixtures. These are presentation foundations, not completion of the representative-art gate in GS-054.
+GS-017 separates browser cadence and typed UI-command dispatch into `game/runtime`, leaving `App` as the composition root. A shared portal-based modal primitive supplies dialog and drawer variants with background inertness, focus containment/return, Escape and backdrop dismissal, body-scroll ownership, and narrow-screen sheet behavior. The station guide and newest-first event-history drawer are non-authoritative projections over simulation state. Responsive layout reorders the world before secondary panels below 900 px, wraps essential resources below 660 px, and keeps semantic meters plus grouped pressed-state time controls. GS-018 next aligns day/dusk/night and Beacon presentation between DOM and Three.js and records deterministic visual fixtures. These are presentation foundations, not completion of the representative-art gate in GS-054.
 
 Renderer selection is provisional. Measure target-scale lighting, instancing, selection, occlusion, and night readability before DEC-003 becomes a permanent commercial-engine commitment.
 

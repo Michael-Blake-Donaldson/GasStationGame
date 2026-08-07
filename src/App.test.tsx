@@ -43,11 +43,11 @@ describe('App simulation timer', () => {
       );
     });
 
-    const normalButton = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent.includes('normal'),
+    const normalButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="normal time"]',
     );
-    expect(normalButton).toBeDefined();
-    if (normalButton === undefined) throw new Error('Normal time button is missing.');
+    expect(normalButton).not.toBeNull();
+    if (normalButton === null) throw new Error('Normal time button is missing.');
 
     act(() => {
       normalButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -75,18 +75,17 @@ describe('App simulation timer', () => {
     });
 
     const status = container.querySelector('[role="status"]');
-    const buttons = [...container.querySelectorAll('button')];
-    const pausedButton = buttons.find((button) =>
-      button.textContent.includes('paused'),
+    const pausedButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="paused time"]',
     );
-    const normalButton = buttons.find((button) =>
-      button.textContent.includes('normal'),
+    const normalButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="normal time"]',
     );
     expect(status?.getAttribute('aria-live')).toBe('polite');
     expect(status?.getAttribute('aria-atomic')).toBe('true');
-    expect(pausedButton).toBeDefined();
-    expect(normalButton).toBeDefined();
-    if (pausedButton === undefined || normalButton === undefined) {
+    expect(pausedButton).not.toBeNull();
+    expect(normalButton).not.toBeNull();
+    if (pausedButton === null || normalButton === null) {
       throw new Error('Time controls are missing.');
     }
 
@@ -111,5 +110,72 @@ describe('App simulation timer', () => {
     act(() => {
       root.unmount();
     });
+  });
+
+  it('opens the station guide and exposes selected time mode semantics', () => {
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(<App />);
+    });
+
+    const pausedButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="paused time"]',
+    );
+    const guideButton = [
+      ...container.querySelectorAll<HTMLButtonElement>('button'),
+    ].find((button) => button.textContent.includes('Station guide'));
+    expect(pausedButton?.getAttribute('aria-pressed')).toBe('true');
+    expect(guideButton).toBeDefined();
+    if (guideButton === undefined) throw new Error('Station guide button is missing.');
+
+    act(() => {
+      guideButton.focus();
+      guideButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.textContent).toContain('Keep the station useful.');
+    expect(document.activeElement?.getAttribute('aria-label')).toBe(
+      'Close Station guide',
+    );
+
+    act(() => {
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }),
+      );
+    });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(guideButton);
+
+    act(() => root.unmount());
+  });
+
+  it('opens a newest-first event history drawer from the station ledger', () => {
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(<App />);
+    });
+
+    const logButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent.includes('Event log'),
+    );
+    expect(logButton).toBeDefined();
+    if (logButton === undefined) throw new Error('Event log button is missing.');
+
+    act(() => {
+      logButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.classList.contains('modal-shell--drawer')).toBe(true);
+    expect(dialog?.textContent).toContain('Morning shift opened.');
+    expect(dialog?.querySelectorAll('.event-history-list li')).toHaveLength(1);
+    expect(dialog?.querySelector('.event-history-list li')?.textContent).toContain(
+      'Morning shift opened.',
+    );
+
+    act(() => root.unmount());
   });
 });

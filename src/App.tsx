@@ -1,25 +1,21 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Modal } from './components/Modal';
 import { gameConfig } from './config/game';
 import { greatPlainsRegion } from './content/regions/greatPlains';
-import { StationScene } from './game/rendering/StationScene';
-import { currentDayNumber } from './game/simulation/advanceSimulation';
-import {
-  dispatchSimulationCommand,
-  type CommandReceipt,
-} from './game/simulation/commands';
-import { formatClock, wholeMinuteForClockUnit } from './game/simulation/clock';
-import { createInitialState } from './game/simulation/createInitialState';
-import {
-  createFixedStepRunner,
-  pumpSimulation,
-  type FixedStepRunnerState,
-} from './game/simulation/fixedStepRunner';
 import {
   presentCommandReceipt,
   presentDomainEvent,
   selectRecentDomainEvents,
 } from './game/presentation/domainEventPresentation';
-import type { SimulationState, TimeMode } from './game/simulation/types';
+import { StationScene } from './game/rendering/StationScene';
+import { useSimulationRuntime } from './game/runtime/useSimulationRuntime';
+import { currentDayNumber } from './game/simulation/advanceSimulation';
+import {
+  formatClock,
+  MINUTES_PER_DAY,
+  wholeMinuteForClockUnit,
+} from './game/simulation/clock';
+import type { TimeMode } from './game/simulation/types';
 
 const RESOURCE_LABELS = [
   ['cash', 'Cash', '$'],
@@ -30,6 +26,13 @@ const RESOURCE_LABELS = [
 
 const TIME_MODES: readonly TimeMode[] = ['paused', 'slow', 'normal', 'fast'];
 
+const timeModeLabel: Record<TimeMode, string> = {
+  paused: 'II',
+  slow: '0.25x',
+  normal: '1x',
+  fast: '2x',
+};
+
 const phaseLabel: Record<string, string> = {
   morning: 'Morning report',
   day: 'Day operations',
@@ -37,80 +40,21 @@ const phaseLabel: Record<string, string> = {
   night: 'Night command',
 };
 
-interface AppRuntime {
-  readonly lastCommandReceipt: CommandReceipt | null;
-  readonly nextCommandSequence: number;
-  readonly runner: FixedStepRunnerState;
-  readonly simulation: SimulationState;
-}
-
 export const App = () => {
-  const [runtime, setRuntime] = useState<AppRuntime>(() => ({
-    lastCommandReceipt: null,
-    nextCommandSequence: 0,
-    runner: createFixedStepRunner(),
-    simulation: createInitialState(1987, gameConfig.verticalSliceNightCount),
-  }));
-  const simulation = runtime.simulation;
-
-  useEffect(() => {
-    let previousTimestamp = performance.now();
-
-    const interval = window.setInterval(() => {
-      if (document.visibilityState !== 'visible') {
-        previousTimestamp = performance.now();
-        setRuntime((current) => ({
-          ...current,
-          runner: createFixedStepRunner(),
-        }));
-        return;
-      }
-
-      const timestamp = performance.now();
-      const elapsedMicroseconds = Math.max(
-        0,
-        Math.round((timestamp - previousTimestamp) * 1000),
-      );
-      previousTimestamp = timestamp;
-
-      setRuntime((current) => {
-        const result = pumpSimulation(
-          current.simulation,
-          current.runner,
-          elapsedMicroseconds,
-        );
-        return {
-          ...current,
-          lastCommandReceipt:
-            result.processedSteps > 0 ? null : current.lastCommandReceipt,
-          runner: result.runner,
-          simulation: result.simulation,
-        };
-      });
-    }, 50);
-
-    const resetAfterVisibilityChange = () => {
-      previousTimestamp = performance.now();
-      setRuntime((current) => ({
-        ...current,
-        runner: createFixedStepRunner(),
-      }));
-    };
-    document.addEventListener('visibilitychange', resetAfterVisibilityChange);
-
-    return () => {
-      window.clearInterval(interval);
-      document.removeEventListener('visibilitychange', resetAfterVisibilityChange);
-    };
-  }, []);
+  const [isGuideOpen, setGuideOpen] = useState(false);
+  const [isHistoryOpen, setHistoryOpen] = useState(false);
+  const { chooseTimeMode, lastCommandReceipt, simulation } = useSimulationRuntime({
+    seed: 1987,
+    targetNightCount: gameConfig.verticalSliceNightCount,
+  });
 
   const topEvent = selectRecentDomainEvents(simulation.eventLedger).at(-1);
   const latestPresentation =
-    runtime.lastCommandReceipt === null
+    lastCommandReceipt === null
       ? topEvent === undefined
         ? null
         : presentDomainEvent(topEvent)
-      : presentCommandReceipt(runtime.lastCommandReceipt);
+      : presentCommandReceipt(lastCommandReceipt);
   const beaconStatus =
     simulation.resources.power <= 0
       ? 'Dark'
@@ -129,24 +73,6 @@ export const App = () => {
     [simulation.completedNights],
   );
 
-  const chooseTimeMode = (mode: TimeMode) => {
-    setRuntime((current) => {
-      const sequence = current.nextCommandSequence;
-      const result = dispatchSimulationCommand(current.simulation, {
-        atTick: current.simulation.tick,
-        command: { type: 'time-mode.set', mode },
-        id: `ui-command-${String(sequence)}`,
-        sequence,
-      });
-      return {
-        ...current,
-        lastCommandReceipt: result.receipt,
-        nextCommandSequence: sequence + 1,
-        simulation: result.state,
-      };
-    });
-  };
-
   return (
     <main className={`app app--${simulation.phase}`}>
       <header className="topbar">
@@ -156,43 +82,47 @@ export const App = () => {
           <span className="build-label">Great Plains systems prototype</span>
         </div>
 
-        <section className="clock-panel" aria-label="Station time">
-          <div>
-            <span className="panel-kicker">Day {currentDayNumber(simulation)}</span>
-            <strong>
-              {formatClock(wholeMinuteForClockUnit(simulation.absoluteClockUnit))}
-            </strong>
-          </div>
-          <div className="phase-chip" data-phase={simulation.phase}>
-            {phaseLabel[simulation.phase]}
-          </div>
-          <div className="time-controls" aria-label="Time controls">
-            {TIME_MODES.map((mode) => (
-              <button
-                className={simulation.timeMode === mode ? 'is-active' : ''}
-                key={mode}
-                onClick={() => chooseTimeMode(mode)}
-                title={
-                  simulation.phase === 'night' && mode === 'paused'
-                    ? 'Night cannot fully pause'
-                    : simulation.phase === 'night' && mode === 'fast'
-                      ? 'Night caps fast mode at normal speed'
-                      : mode
-                }
-                type="button"
-              >
-                {mode === 'paused'
-                  ? 'Ⅱ'
-                  : mode === 'slow'
-                    ? '¼'
-                    : mode === 'normal'
-                      ? '▶'
-                      : '▶▶'}
-                <span className="sr-only">{mode}</span>
-              </button>
-            ))}
-          </div>
-        </section>
+        <div className="topbar-actions">
+          <section className="clock-panel" aria-label="Station time">
+            <div className="clock-readout">
+              <span className="panel-kicker">Day {currentDayNumber(simulation)}</span>
+              <strong>
+                {formatClock(wholeMinuteForClockUnit(simulation.absoluteClockUnit))}
+              </strong>
+            </div>
+            <div className="phase-chip" data-phase={simulation.phase}>
+              {phaseLabel[simulation.phase]}
+            </div>
+            <div className="time-controls" aria-label="Time controls" role="group">
+              {TIME_MODES.map((mode) => (
+                <button
+                  aria-label={`${mode} time`}
+                  aria-pressed={simulation.timeMode === mode}
+                  className={simulation.timeMode === mode ? 'is-active' : ''}
+                  key={mode}
+                  onClick={() => chooseTimeMode(mode)}
+                  title={
+                    simulation.phase === 'night' && mode === 'paused'
+                      ? 'Night cannot fully pause'
+                      : simulation.phase === 'night' && mode === 'fast'
+                        ? 'Night caps fast mode at normal speed'
+                        : mode
+                  }
+                  type="button"
+                >
+                  <span aria-hidden="true">{timeModeLabel[mode]}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+          <button
+            className="guide-button"
+            onClick={() => setGuideOpen(true)}
+            type="button"
+          >
+            Station guide
+          </button>
+        </div>
       </header>
 
       <section className="resource-strip" aria-label="Station resources">
@@ -234,7 +164,15 @@ export const App = () => {
                   <strong>{employee.name}</strong>
                   <span>{employee.role}</span>
                 </div>
-                <div className="fatigue" title={`Fatigue ${String(employee.fatigue)}%`}>
+                <div
+                  aria-label={`${employee.name} fatigue`}
+                  aria-valuemax={100}
+                  aria-valuemin={0}
+                  aria-valuenow={employee.fatigue}
+                  className="fatigue"
+                  role="meter"
+                  title={`Fatigue ${String(employee.fatigue)}%`}
+                >
                   <span style={{ width: `${String(employee.fatigue)}%` }} />
                 </div>
               </article>
@@ -280,21 +218,39 @@ export const App = () => {
             <span>Planned grid allocation · preview</span>
             <div className="allocation-row">
               <span>Beacon</span>
-              <div>
+              <div
+                aria-label="Beacon power allocation"
+                aria-valuemax={100}
+                aria-valuemin={0}
+                aria-valuenow={52}
+                role="meter"
+              >
                 <i style={{ width: '52%' }} />
               </div>
               <strong>52%</strong>
             </div>
             <div className="allocation-row">
               <span>Lights</span>
-              <div>
+              <div
+                aria-label="Lights power allocation"
+                aria-valuemax={100}
+                aria-valuemin={0}
+                aria-valuenow={28}
+                role="meter"
+              >
                 <i style={{ width: '28%' }} />
               </div>
               <strong>28%</strong>
             </div>
             <div className="allocation-row">
               <span>Garage</span>
-              <div>
+              <div
+                aria-label="Garage power allocation"
+                aria-valuemax={100}
+                aria-valuemin={0}
+                aria-valuenow={20}
+                role="meter"
+              >
                 <i style={{ width: '20%' }} />
               </div>
               <strong>20%</strong>
@@ -314,8 +270,87 @@ export const App = () => {
           <span className="panel-kicker">Latest station event</span>
           <strong>{latestPresentation?.message ?? 'No station events.'}</strong>
         </div>
+        <button
+          className="event-history-button"
+          onClick={() => setHistoryOpen(true)}
+          type="button"
+        >
+          Event log
+        </button>
         <span className="seed-label">Seed {simulation.seed}</span>
       </footer>
+
+      <Modal
+        eyebrow="Field manual / issue 01"
+        isOpen={isGuideOpen}
+        onClose={() => setGuideOpen(false)}
+        title="Station guide"
+      >
+        <div className="guide-intro">
+          <strong>Keep the station useful. Keep the beacon visible.</strong>
+          <p>
+            The Great Plains prototype currently demonstrates the station clock,
+            deterministic simulation, and the first playable presentation layer.
+          </p>
+        </div>
+        <div className="guide-grid">
+          <section>
+            <span className="guide-number">01</span>
+            <h3>Read the shift</h3>
+            <p>Track cash, fuel, ammunition, power, and crew fatigue before dusk.</p>
+          </section>
+          <section>
+            <span className="guide-number">02</span>
+            <h3>Control the clock</h3>
+            <p>Pause or change speed during the day. Night restricts unsafe modes.</p>
+          </section>
+          <section>
+            <span className="guide-number">03</span>
+            <h3>Trust the ledger</h3>
+            <p>
+              The lower console explains the latest accepted command or world event.
+            </p>
+          </section>
+        </div>
+        <div className="guide-note">
+          <span className="status-lamp" aria-hidden="true" />
+          <p>
+            Planned systems are labeled as previews until they are simulation-backed.
+          </p>
+        </div>
+      </Modal>
+
+      <Modal
+        eyebrow="Station record"
+        isOpen={isHistoryOpen}
+        onClose={() => setHistoryOpen(false)}
+        title="Event log"
+        variant="drawer"
+      >
+        <p className="event-history-intro">
+          Recent simulation outcomes, newest first. Each entry comes from the
+          authoritative station ledger.
+        </p>
+        <ol className="event-history-list">
+          {[...selectRecentDomainEvents(simulation.eventLedger, 20)]
+            .reverse()
+            .map((event) => {
+              const presentation = presentDomainEvent(event);
+              return (
+                <li data-tone={presentation.tone} key={event.sequence}>
+                  <div className="event-history-meta">
+                    <span>Event {event.sequence + 1}</span>
+                    <time>
+                      Day {Math.floor(event.minute / MINUTES_PER_DAY) + 1} /{' '}
+                      {formatClock(event.minute)}
+                    </time>
+                  </div>
+                  <p>{presentation.message}</p>
+                </li>
+              );
+            })}
+        </ol>
+      </Modal>
     </main>
   );
 };

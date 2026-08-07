@@ -1,6 +1,6 @@
 # Great Plains Playtest Plan
 
-Last updated: 2026-08-06
+Last updated: 2026-08-07
 
 ## Purpose
 
@@ -117,6 +117,19 @@ The slice may receive a **go** recommendation only when repeated sessions show:
 - fixed-seed reports and saves remain deterministic and reconciled.
 
 Record the go/no-go result in `docs/DECISIONS.md`. A no-go returns concrete experiments to the top of `docs/BACKLOG.md`; it does not justify adding campaign breadth.
+
+## Presentation smoke matrix
+
+Before a playtest build is accepted, inspect the HUD, station guide, and event-history drawer at these effective viewport widths:
+
+| Width        | Expected composition                                                                                           |
+| ------------ | -------------------------------------------------------------------------------------------------------------- |
+| 1920–1180 px | Single-screen three-column station view; side panels scroll internally only when height requires it.           |
+| 900 px       | World preview precedes the two secondary panels; essential controls remain visible.                            |
+| 660 px       | One-column world/crew/intel flow; resource values wrap into two columns; event console stays reachable.        |
+| 320 px       | No page-level horizontal overflow or visible text below 10 px; guide and event log remain keyboard accessible. |
+
+At each width, verify selected time mode without relying on color, visible focus, forward and reverse focus containment, Escape/backdrop dismissal, focus return, background inertness, intentional overlay scrolling, and no clipped essential resource. Record screenshots only after repository-owned typography makes cross-machine comparisons deterministic.
 
 ## Issue severity
 
