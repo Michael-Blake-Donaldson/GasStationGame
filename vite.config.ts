@@ -7,7 +7,7 @@ export default defineConfig({
   build: {
     // The direct Three.js prototype is intentionally kept in one initial chunk.
     // Revisit with measured scene data in GS-056 before adding speculative splits.
-    chunkSizeWarningLimit: 850,
+    chunkSizeWarningLimit: 900,
   },
   server: {
     host: '127.0.0.1',

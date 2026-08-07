@@ -47,10 +47,11 @@ const phaseLabel: Record<string, string> = {
 export const App = () => {
   const [isGuideOpen, setGuideOpen] = useState(false);
   const [isHistoryOpen, setHistoryOpen] = useState(false);
-  const { chooseTimeMode, lastCommandReceipt, simulation } = useSimulationRuntime({
-    seed: 1987,
-    targetNightCount: gameConfig.verticalSliceNightCount,
-  });
+  const { chooseTimeMode, isRecoveryReady, lastCommandReceipt, simulation } =
+    useSimulationRuntime({
+      seed: 1987,
+      targetNightCount: gameConfig.verticalSliceNightCount,
+    });
 
   const topEvent = selectRecentDomainEvents(simulation.eventLedger).at(-1);
   const latestPresentation =
@@ -99,6 +100,7 @@ export const App = () => {
                   aria-label={`${mode} time`}
                   aria-pressed={simulation.timeMode === mode}
                   className={simulation.timeMode === mode ? 'is-active' : ''}
+                  disabled={!isRecoveryReady}
                   key={mode}
                   onClick={() => chooseTimeMode(mode)}
                   title={

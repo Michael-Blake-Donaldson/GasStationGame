@@ -131,6 +131,8 @@ Before a playtest build is accepted, inspect the HUD, station guide, and event-h
 
 At each width, verify selected time mode without relying on color, visible focus, forward and reverse focus containment, Escape/backdrop dismissal, focus return, background inertness, intentional overlay scrolling, and no clipped essential resource. Record screenshots only after repository-owned typography makes cross-machine comparisons deterministic.
 
+Before any build with durable saves reaches playtest, exercise the recovery matrix: clean newest slot, truncated newest slot, invalid-checksum newest slot, one unreadable slot, interrupted atomic replacement, failed read-back verification, and concurrent autosave requests. Confirm the newest valid sequence resumes exactly, fallback is disclosed, no failure mutates another recovery slot, and a loaded runtime neither replays old phase autosaves nor carries wall-clock runner debt.
+
 For development review, run `pnpm dev` and open `/?visual-fixture=station&atmosphere=day&beacon=stable`. Review the complete Cartesian matrix using `day|dusk|night` and `stable|critical|dark`. Each fixture must create one canvas, expose the selected values in its accessible scene label, avoid fresh console warnings, and keep important station silhouettes readable. This route is development-only and must not appear in a production bundle.
 
 ## Issue severity

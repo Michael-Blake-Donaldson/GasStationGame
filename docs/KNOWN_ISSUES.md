@@ -19,13 +19,13 @@ Last updated: 2026-08-07
 - **Resolution:** GS-010 replaced floating minute/UI cadence stepping with integer clock units, a fixed 100 ms active step, a debt-preserving browser accumulator, typed time commands, a clock replay fixture, and deterministic checkpoint hashing. Boundary, cadence-partition, long-run invariant, invalid-input, and exact-completion tests pass.
 - **Remaining boundary:** GS-012 now supplies versioned serializable RNG and scenario-level replay. Save/load continuation and migration remain GS-015/016 work rather than clock defects.
 
-### KI-003 — Physical save storage and recovery rotation are not implemented
+### KI-003 — Save/recovery status has no player-facing UI
 
 - **Severity:** High
 - **Status:** Open
-- **Impact:** The validated schema/codec can round-trip and continue authoritative state, but players cannot yet create, enumerate, load, or recover local slots through the application.
-- **Progress:** GS-015 added save schema v1, separate campaign/station/session state, content compatibility, checksum/save sequence metadata, a frozen migration fixture, strict causal validation, and deterministic resumed-run equality.
-- **Plan:** GS-016 adds the local storage adapter, atomic writes, rotating autosave slots, and newest-valid recovery selection without weakening the pure codec.
+- **Impact:** Tauri now autosaves durably at dusk/morning and adopts the newest valid recovery at startup, but the player is not told when fallback occurred or a storage operation failed, and there is no manual save/load workflow. Browser development is intentionally ephemeral.
+- **Progress:** GS-015 established the schema and validation boundary. GS-016 added the fixed-name Tauri adapter, three-slot compare-and-replace rotation, corruption/I/O diagnostics, newest-valid fallback, exact post-write verification, cross-service conflict handling, phase autosaves, and transient-safe startup adoption without granting frontend filesystem paths.
+- **Plan:** Add accessible save/load and recovery-status presentation before external playtesting. Keep automatic failures non-destructive and surface actionable, non-technical copy without weakening diagnostic logs.
 
 ### KI-004 — Renderer choice has not passed the performance/readability prototype
 
@@ -56,9 +56,9 @@ Last updated: 2026-08-07
 
 - **Severity:** Low
 - **Status:** Open
-- **Symptoms:** React, Tauri's title adapter, the deterministic simulation/persistence foundation, and the direct Three.js prototype currently produce one 849.34 kB minified JavaScript asset (228.28 kB gzip).
+- **Symptoms:** React, Tauri's title/recovery adapters, the deterministic simulation/persistence foundation, and the direct Three.js prototype currently produce one 878.97 kB minified JavaScript asset (235.68 kB gzip).
 - **Impact:** Startup is acceptable for the scaffold but may grow without an asset/scene loading boundary.
-- **Plan:** Measure startup and target scenes in GS-056, then split by actual loading phases rather than speculative package boundaries. Vite's advisory threshold is temporarily 850 kB so this known baseline does not appear as an unexplained build warning.
+- **Plan:** Measure startup and target scenes in GS-056, then split by actual loading phases rather than speculative package boundaries. Vite's advisory threshold is temporarily 900 kB so this known baseline does not appear as an unexplained build warning.
 
 ### KI-008 — Local Rust toolchain is too old for the resolved desktop dependencies
 
