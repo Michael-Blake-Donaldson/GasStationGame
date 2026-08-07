@@ -1,6 +1,6 @@
 # Decision Log
 
-Last updated: 2026-08-06
+Last updated: 2026-08-07
 
 Decisions are append-only. To change one, add a new decision that supersedes it and update the old status.
 
@@ -68,3 +68,11 @@ Decisions are append-only. To change one, add a new decision that supersedes it 
 - **Context:** Replay, morning reports, and failure explanations cannot depend on a bounded UI log or player-facing prose. Commands also need deterministic acceptance and rejection outcomes.
 - **Decision:** Route authoritative player intent through a pure typed command dispatcher. Store every meaningful authoritative transition as an ordered, reason-coded domain event with an explicit safe-integer sequence, fixed tick, and exact clock position. Keep the full ledger for the active scenario; derive the latest eight items and all player-facing copy through presentation selectors. Mechanical tick/clock-unit movement, receipts, rejected/no-op commands, and UI-only state are not domain events.
 - **Consequences:** Checkpoint version 2 hashes typed ledger data rather than localized copy; replay consumes the state ledger directly; resource changes preserve before/requested/applied/after causality. Save retention/compaction remains a GS-015 design concern, and new command/event variants must extend exhaustive dispatch and presentation tests.
+
+## DEC-009 — Version deterministic randomness as replay and save ABI
+
+- **Date:** 2026-08-07
+- **Status:** Accepted
+- **Context:** Generated employees, travelers, threats, weather, loot, and combat must reproduce under tests and resume without reconstructing current random state from a seed.
+- **Decision:** Use a project-owned xoshiro128** generator identified as `xoshiro128ss` version 1. Its JSON-native state contains four unsigned 32-bit words and a safe-integer raw draw count. Seed expansion consumes the complete existing non-negative safe-integer seed and zero gameplay draws. Pure draw functions return replacement state; bounded integers use rejection sampling, and simulation code may not call `Math.random()`.
+- **Consequences:** The algorithm, seed expansion, output transform, state transition, rejection behavior, and draw-consumption rules are persistence/replay ABI. Any change requires a new RNG version and explicit migration or rejection policy. Checkpoint version 3 includes RNG and scenario identity. Raw draws are mechanical substrate and do not emit events; the authoritative outcome selected by a future random system must emit an explainable domain event.

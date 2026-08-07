@@ -4,29 +4,66 @@ import {
   type CommandEnvelope,
   type CommandReceipt,
 } from './commands';
-import { hashSimulationState } from './checkpoint';
+import { hashDomainEventLedger, hashSimulationState } from './checkpoint';
 import { createInitialState } from './createInitialState';
+import {
+  SEEDED_RANDOM_ALGORITHM,
+  SEEDED_RANDOM_VERSION,
+  type SeededRandomState,
+} from './random';
+import { GREAT_PLAINS_SCENARIO_ID, GREAT_PLAINS_SCENARIO_VERSION } from './scenario';
 import type { DomainEvent, SimulationState, TimeMode } from './types';
 
-export type ClockCommandEnvelope = CommandEnvelope;
+export { GREAT_PLAINS_SCENARIO_ID, GREAT_PLAINS_SCENARIO_VERSION } from './scenario';
 
+export interface ScenarioReplayV1 {
+  readonly commands: readonly CommandEnvelope[];
+  readonly replayKind: 'scenario';
+  readonly replayVersion: 1;
+  readonly rng: {
+    readonly algorithm: typeof SEEDED_RANDOM_ALGORITHM;
+    readonly seed: number;
+    readonly version: typeof SEEDED_RANDOM_VERSION;
+  };
+  readonly scenarioId: typeof GREAT_PLAINS_SCENARIO_ID;
+  readonly scenarioVersion: typeof GREAT_PLAINS_SCENARIO_VERSION;
+  readonly stopAfterTick: number;
+  readonly targetNightCount: number;
+}
+
+export type ScenarioReplayStopReason =
+  'paused-with-no-reachable-command' | 'slice-completed' | 'tick-limit-reached';
+
+export interface ScenarioReplayResult {
+  readonly consumedCommandIds: readonly string[];
+  readonly eventLedger: readonly DomainEvent[];
+  readonly eventLedgerHash: string;
+  readonly finalRng: SeededRandomState;
+  readonly receipts: readonly CommandReceipt[];
+  readonly state: SimulationState;
+  readonly stateHash: string;
+  readonly stopReason: ScenarioReplayStopReason;
+  readonly unconsumedCommandIds: readonly string[];
+}
+
+/** Legacy GS-010 replay input retained as an explicit adapter. */
 export interface ClockReplayV1 {
-  readonly commands: readonly ClockCommandEnvelope[];
+  readonly commands: readonly CommandEnvelope[];
   readonly replayVersion: 1;
   readonly seed: number;
   readonly stopAfterTick: number;
   readonly targetNightCount: number;
 }
 
-export interface ClockReplayResult {
+/** Legacy GS-010 result retains the old `events` projection. */
+export interface ClockReplayResult extends ScenarioReplayResult {
   readonly events: readonly DomainEvent[];
-  readonly receipts: readonly CommandReceipt[];
-  readonly state: SimulationState;
-  readonly stateHash: string;
-  readonly unconsumedCommandIds: readonly string[];
 }
 
 const TIME_MODES: readonly TimeMode[] = ['paused', 'slow', 'normal', 'fast'];
+
+const isRecord = (value: unknown): value is Record<PropertyKey, unknown> =>
+  typeof value === 'object' && value !== null;
 
 const assertNonNegativeSafeInteger = (value: number, name: string): void => {
   if (!Number.isSafeInteger(value) || value < 0) {
@@ -34,42 +71,15 @@ const assertNonNegativeSafeInteger = (value: number, name: string): void => {
   }
 };
 
-const isRecord = (value: unknown): value is Record<PropertyKey, unknown> =>
-  typeof value === 'object' && value !== null;
-
-const validateReplay: (replay: unknown) => asserts replay is ClockReplayV1 = (
-  replay,
-) => {
-  if (!isRecord(replay)) {
-    throw new RangeError('Clock replay must be an object.');
-  }
-
-  const replayVersion = replay.replayVersion;
-  if (replayVersion !== 1) {
-    throw new RangeError('Unsupported clock replay version.');
-  }
-
-  if (typeof replay.seed !== 'number') throw new RangeError('seed must be a number.');
-  if (typeof replay.stopAfterTick !== 'number') {
-    throw new RangeError('stopAfterTick must be a number.');
-  }
-  if (typeof replay.targetNightCount !== 'number') {
-    throw new RangeError('targetNightCount must be a number.');
-  }
-  if (!Array.isArray(replay.commands)) {
-    throw new RangeError('commands must be an array.');
-  }
-
-  assertNonNegativeSafeInteger(replay.seed, 'seed');
-  assertNonNegativeSafeInteger(replay.stopAfterTick, 'stopAfterTick');
-  if (!Number.isSafeInteger(replay.targetNightCount) || replay.targetNightCount < 1) {
-    throw new RangeError('targetNightCount must be a positive safe integer.');
-  }
+const validateCommands: (
+  value: unknown,
+) => asserts value is readonly CommandEnvelope[] = (value) => {
+  if (!Array.isArray(value)) throw new RangeError('commands must be an array.');
 
   const ids = new Set<string>();
   const sequences = new Set<number>();
 
-  for (const envelope of replay.commands as readonly unknown[]) {
+  for (const envelope of value as readonly unknown[]) {
     if (!isRecord(envelope)) {
       throw new RangeError('Command envelopes must be objects.');
     }
@@ -95,24 +105,81 @@ const validateReplay: (replay: unknown) => asserts replay is ClockReplayV1 = (
     if (!isRecord(envelope.command)) {
       throw new RangeError('Replay command payloads must be objects.');
     }
-    const commandType = envelope.command.type;
     if (
-      commandType !== 'time-mode.set' ||
+      envelope.command.type !== 'time-mode.set' ||
       !TIME_MODES.includes(envelope.command.mode as TimeMode)
     ) {
-      throw new RangeError('Unsupported clock replay command.');
+      throw new RangeError('Unsupported scenario replay command.');
     }
   }
 };
 
-export const runClockReplay = (replay: ClockReplayV1): ClockReplayResult => {
-  validateReplay(replay);
+const validateCommonFields = (replay: Record<PropertyKey, unknown>): void => {
+  if (typeof replay.stopAfterTick !== 'number') {
+    throw new RangeError('stopAfterTick must be a number.');
+  }
+  if (typeof replay.targetNightCount !== 'number') {
+    throw new RangeError('targetNightCount must be a number.');
+  }
+  assertNonNegativeSafeInteger(replay.stopAfterTick, 'stopAfterTick');
+  if (!Number.isSafeInteger(replay.targetNightCount) || replay.targetNightCount < 1) {
+    throw new RangeError('targetNightCount must be a positive safe integer.');
+  }
+  validateCommands(replay.commands);
+};
 
-  const commands = [...replay.commands].sort(
+const validateScenarioReplay: (
+  replay: unknown,
+) => asserts replay is ScenarioReplayV1 = (replay) => {
+  if (!isRecord(replay)) throw new RangeError('Scenario replay must be an object.');
+  if (replay.replayKind !== 'scenario' || replay.replayVersion !== 1) {
+    throw new RangeError('Unsupported scenario replay format.');
+  }
+  if (
+    replay.scenarioId !== GREAT_PLAINS_SCENARIO_ID ||
+    replay.scenarioVersion !== GREAT_PLAINS_SCENARIO_VERSION
+  ) {
+    throw new RangeError('Unsupported scenario replay version.');
+  }
+  if (
+    !isRecord(replay.rng) ||
+    replay.rng.algorithm !== SEEDED_RANDOM_ALGORITHM ||
+    replay.rng.version !== SEEDED_RANDOM_VERSION
+  ) {
+    throw new RangeError('Unsupported scenario replay RNG.');
+  }
+  if (typeof replay.rng.seed !== 'number') {
+    throw new RangeError('rng.seed must be a number.');
+  }
+  assertNonNegativeSafeInteger(replay.rng.seed, 'rng.seed');
+  validateCommonFields(replay);
+};
+
+const validateClockReplay: (replay: unknown) => asserts replay is ClockReplayV1 = (
+  replay,
+) => {
+  if (!isRecord(replay)) throw new RangeError('Clock replay must be an object.');
+  if (replay.replayVersion !== 1) {
+    throw new RangeError('Unsupported clock replay version.');
+  }
+  if (typeof replay.seed !== 'number') throw new RangeError('seed must be a number.');
+  assertNonNegativeSafeInteger(replay.seed, 'seed');
+  validateCommonFields(replay);
+};
+
+const orderedCommands = (
+  commands: readonly CommandEnvelope[],
+): readonly CommandEnvelope[] =>
+  [...commands].sort(
     (left, right) => left.atTick - right.atTick || left.sequence - right.sequence,
   );
+
+export const runScenarioReplay = (replay: ScenarioReplayV1): ScenarioReplayResult => {
+  validateScenarioReplay(replay);
+
+  const commands = orderedCommands(replay.commands);
   let commandIndex = 0;
-  let state = createInitialState(replay.seed, replay.targetNightCount);
+  let state = createInitialState(replay.rng.seed, replay.targetNightCount);
   const receipts: CommandReceipt[] = [];
 
   while (state.tick < replay.stopAfterTick && !state.isSliceComplete) {
@@ -130,11 +197,47 @@ export const runClockReplay = (replay: ClockReplayV1): ClockReplayResult => {
     state = advanced;
   }
 
+  const eventLedger = state.eventLedger;
+  const consumedCommandIds = commands
+    .slice(0, commandIndex)
+    .map((command) => command.id);
+  const unconsumedCommandIds = commands
+    .slice(commandIndex)
+    .map((command) => command.id);
+  const stopReason: ScenarioReplayStopReason = state.isSliceComplete
+    ? 'slice-completed'
+    : state.tick >= replay.stopAfterTick
+      ? 'tick-limit-reached'
+      : 'paused-with-no-reachable-command';
+
   return {
-    events: state.eventLedger,
+    consumedCommandIds,
+    eventLedger,
+    eventLedgerHash: hashDomainEventLedger(eventLedger),
+    finalRng: state.rng,
     receipts,
     state,
     stateHash: hashSimulationState(state),
-    unconsumedCommandIds: commands.slice(commandIndex).map((command) => command.id),
+    stopReason,
+    unconsumedCommandIds,
   };
+};
+
+export const runClockReplay = (replay: ClockReplayV1): ClockReplayResult => {
+  validateClockReplay(replay);
+  const result = runScenarioReplay({
+    commands: replay.commands,
+    replayKind: 'scenario',
+    replayVersion: 1,
+    rng: {
+      algorithm: SEEDED_RANDOM_ALGORITHM,
+      seed: replay.seed,
+      version: SEEDED_RANDOM_VERSION,
+    },
+    scenarioId: GREAT_PLAINS_SCENARIO_ID,
+    scenarioVersion: GREAT_PLAINS_SCENARIO_VERSION,
+    stopAfterTick: replay.stopAfterTick,
+    targetNightCount: replay.targetNightCount,
+  });
+  return { ...result, events: result.eventLedger };
 };

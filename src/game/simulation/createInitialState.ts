@@ -1,4 +1,10 @@
 import { CLOCK_UNITS_PER_MINUTE } from './clock';
+import {
+  SEEDED_RANDOM_ALGORITHM,
+  SEEDED_RANDOM_VERSION,
+  createSeededRandomState,
+} from './random';
+import { GREAT_PLAINS_SCENARIO_ID, GREAT_PLAINS_SCENARIO_VERSION } from './scenario';
 import type { SimulationState } from './types';
 
 export const createInitialState = (
@@ -47,6 +53,10 @@ export const createInitialState = (
         absoluteClockUnit,
         minute: 8 * 60,
         reason: 'scenario-initialized',
+        rngAlgorithm: SEEDED_RANDOM_ALGORITHM,
+        rngVersion: SEEDED_RANDOM_VERSION,
+        scenarioId: GREAT_PLAINS_SCENARIO_ID,
+        scenarioVersion: GREAT_PLAINS_SCENARIO_VERSION,
         seed,
         sequence: 0,
         targetNightCount,
@@ -57,6 +67,9 @@ export const createInitialState = (
     isSliceComplete: false,
     nextEventSequence: 1,
     phase: 'day',
+    rng: createSeededRandomState(seed),
+    scenarioId: GREAT_PLAINS_SCENARIO_ID,
+    scenarioVersion: GREAT_PLAINS_SCENARIO_VERSION,
     resources: {
       ammunition: 36,
       cash: 420,

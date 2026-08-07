@@ -12,7 +12,7 @@ This repository contains the development foundation and a representative systems
 - a configurable player-facing title (`VITE_GAME_TITLE`);
 - validated Great Plains content data;
 - a placeholder orthographic 3D station and management HUD;
-- an integer fixed-step phase clock with typed time commands, replay fixtures, and deterministic checkpoint hashing;
+- an integer fixed-step phase clock with typed commands/events, versioned seeded RNG, scenario replay fixtures, and deterministic state/ledger hashing;
 - Vite browser builds and a Tauri 2 Windows desktop shell;
 - repository guidance, project-scoped read-only review agents, and production planning documents.
 

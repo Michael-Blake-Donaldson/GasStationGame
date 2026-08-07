@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-08-06
+Last updated: 2026-08-07
 
 ## Goals
 
@@ -71,7 +71,11 @@ GS-011 adds a pure exhaustive command dispatcher around typed envelopes. A comma
 
 The authoritative `eventLedger` is complete for the active scenario and has an independent monotonic `nextEventSequence`. Events contain typed facts and reason codes for scenario start, time-mode change, phase entry, resource change, night completion, and slice completion. Resource events retain before, requested delta, applied delta, and after values in stable resource-key order. Events caused at a clock boundary use the exact crossed clock unit; sequence resolves events sharing a tick and boundary. Presentation maps events to copy/tone and selects the latest eight without truncating state. Mechanical tick/clock-unit increments are ordering substrate rather than domain events.
 
-Checkpoint version 2 includes the complete ledger and sequence cursor, canonicalizes object keys, preserves semantic array order, and excludes presentation copy. The clock replay fixture consumes dispatch receipts and the authoritative ledger directly. It remains a regression foundation rather than a save format; GS-012 adds serializable RNG and scenario-level replay.
+GS-012 adds project-owned xoshiro128** randomness. Authoritative state retains the original scenario seed plus the current RNG algorithm/version, four uint32 words, and raw draw count. Initialization uses the complete non-negative safe-integer seed, while every draw is pure and returns replacement state. Bounded integer, index, choice, and ratio helpers have fixed draw-consumption rules; modulo bias is avoided through rejection sampling. Simulation lint rejects `Math.random()`. RNG movement is mechanical substrate rather than a domain event; future random outcomes must emit their meaningful resolved facts.
+
+Scenario replay version 1 pins replay kind/version, Great Plains scenario ID/version, RNG algorithm/version/seed, target night count, command stream, and stop tick. It validates the complete envelope before initialization, executes commands by tick and sequence, and reports consumed/unconsumed command IDs, receipts, final RNG, an explicit stop reason, full state, and independent state/ledger diagnostic hashes. Repeated runs compare full state and ledger rather than trusting hashes alone. The GS-010 clock replay remains an explicit compatibility adapter.
+
+Checkpoint version 3 includes scenario identity, complete RNG continuation state, the full ledger, and sequence cursor; it canonicalizes object keys, preserves semantic array order, and excludes presentation copy. Checkpoints and replays are deterministic diagnostics, not yet the validated save-file format introduced by GS-015.
 
 ## Content model
 
@@ -84,6 +88,8 @@ Major story content remains authored. Generated employees/travelers will combine
 Three.js owns scene projection, camera, lighting, meshes, particles, picking, overlays, and animation adapters. The initial renderer uses an orthographic camera and procedural placeholder geometry. It will later consume immutable simulation snapshots and interpolate visually between fixed ticks.
 
 React owns panels, alerts, dialogue, settings, focus, and transient selection affordances. UI sends commands instead of changing simulation objects. Critical state uses text/shape plus color and remains readable without decorative CRT interference.
+
+GS-017 is scheduled before grid work to separate runtime orchestration from reusable HUD/panel primitives and establish accessible dialog/drawer behavior, responsive UI scaling, semantic controls, and honest prototype labels. GS-018 then aligns day/dusk/night and Beacon presentation between DOM and Three.js and records deterministic visual fixtures. These are presentation foundations, not completion of the representative-art gate in GS-054.
 
 Renderer selection is provisional. Measure target-scale lighting, instancing, selection, occlusion, and night readability before DEC-003 becomes a permanent commercial-engine commitment.
 

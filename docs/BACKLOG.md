@@ -1,6 +1,6 @@
 # Great Plains Vertical-Slice Backlog
 
-Last updated: 2026-08-06
+Last updated: 2026-08-07
 
 This backlog implements the GDD milestone sequence. Priority is strict: finish and verify the current milestone before expanding the next. `P0` blocks the vertical slice, `P1` is required for the playtest gate, and `P2` is post-gate or optional polish.
 
@@ -16,7 +16,9 @@ This backlog implements the GDD milestone sequence. Priority is strict: finish a
 
 - [x] **GS-010 (P0): Implement fixed-tick phase clock.** Acceptance: the integer 100 ms clock kernel preserves exact phase/resource boundaries, daytime pause, the nighttime slow-time floor and fast-time cap, and exact three-night completion; the browser accumulator is independent of callback cadence and retains capped catch-up debt; typed time commands, replay receipts, deterministic checkpoint hashes, and boundary/property tests pass.
 - [x] **GS-011 (P0): Add typed command and domain-event buses.** Acceptance: UI submits typed commands; every authoritative change emits ordered, reason-coded events; rejected commands explain why.
-- [ ] **GS-012 (P0): Add seeded RNG and replay harness.** Acceptance: RNG state is serializable; identical seed plus command stream yields identical state hash and event ledger across repeated runs.
+- [x] **GS-012 (P0): Add seeded RNG and replay harness.** Acceptance: RNG state is serializable; identical seed plus command stream yields identical state hash and event ledger across repeated runs.
+- [ ] **GS-017 (P0): Establish the responsive presentation and modal foundation.** Scheduled directly after GS-012 by user priority and begins by completing GS-005. Acceptance: App runtime orchestration is separated from reusable HUD/panel primitives; an accessible dialog and event-history drawer implement focus containment/return, Escape, keyboard operation, honest prototype labels, and intentional scrolling; time controls expose selected/limited states; essential UI remains usable at 1024×720 through 1920×1080 and 100–150% UI scale.
+- [ ] **GS-018 (P1): Establish the graphics and readability baseline.** Acceptance: deterministic day/dusk/night and Beacon stable/critical/dark fixtures keep HUD and Three.js state consistent; repository-owned fonts, visual tokens, reduced-motion behavior, lightweight Great Plains placeholder identity, and a documented screenshot matrix produce reviewed baselines without claiming final art or gameplay systems.
 - [ ] **GS-013 (P0): Implement station grid and occupancy.** Acceptance: authored facility plots and flexible-placement cells share deterministic coordinates; occupancy queries have unit/property coverage.
 - [ ] **GS-014 (P0): Implement deterministic employee movement and job assignment.** Acceptance: four employees can accept, travel to, perform, cancel, and complete jobs; unreachable work is rejected with a cause.
 - [ ] **GS-015 (P0): Implement versioned save/load.** Acceptance: schema version, content IDs, RNG state, event sequence, station state, and separate campaign state round-trip at day, dusk, night, and morning boundaries.

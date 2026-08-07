@@ -1,3 +1,5 @@
+import type { SeededRandomState } from './random';
+
 export type SimulationPhase = 'morning' | 'day' | 'dusk' | 'night';
 export type TimeMode = 'paused' | 'slow' | 'normal' | 'fast';
 
@@ -38,6 +40,10 @@ export interface DomainEventBase {
 export type DomainEvent =
   | (DomainEventBase & {
       reason: 'scenario-initialized';
+      rngAlgorithm: SeededRandomState['algorithm'];
+      rngVersion: SeededRandomState['version'];
+      scenarioId: string;
+      scenarioVersion: number;
       seed: number;
       targetNightCount: number;
       type: 'simulation.started';
@@ -83,6 +89,9 @@ export interface SimulationState {
   isSliceComplete: boolean;
   nextEventSequence: number;
   phase: SimulationPhase;
+  rng: SeededRandomState;
+  scenarioId: string;
+  scenarioVersion: number;
   resources: Readonly<Resources>;
   seed: number;
   targetNightCount: number;

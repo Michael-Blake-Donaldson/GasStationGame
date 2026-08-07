@@ -1,6 +1,6 @@
 # Known Issues and Risks
 
-Last updated: 2026-08-06
+Last updated: 2026-08-07
 
 ## Active implementation limitations
 
@@ -17,7 +17,7 @@ Last updated: 2026-08-06
 - **Severity:** High
 - **Status:** Resolved 2026-08-06
 - **Resolution:** GS-010 replaced floating minute/UI cadence stepping with integer clock units, a fixed 100 ms active step, a debt-preserving browser accumulator, typed time commands, a clock replay fixture, and deterministic checkpoint hashing. Boundary, cadence-partition, long-run invariant, invalid-input, and exact-completion tests pass.
-- **Remaining boundary:** Serializable scenario RNG and scenario-level replay remain GS-012 work rather than clock defects.
+- **Remaining boundary:** GS-012 now supplies versioned serializable RNG and scenario-level replay. Save/load continuation and migration remain GS-015/016 work rather than clock defects.
 
 ### KI-003 — Save/load and recovery are not implemented
 
@@ -55,7 +55,7 @@ Last updated: 2026-08-06
 
 - **Severity:** Low
 - **Status:** Open
-- **Symptoms:** React, Tauri's title adapter, the fixed-step simulation foundation, and the direct Three.js prototype currently produce one roughly 804 kB minified JavaScript asset (about 216 kB gzip).
+- **Symptoms:** React, Tauri's title adapter, the deterministic simulation foundation, and the direct Three.js prototype currently produce one roughly 810 kB minified JavaScript asset (about 217 kB gzip).
 - **Impact:** Startup is acceptable for the scaffold but may grow without an asset/scene loading boundary.
 - **Plan:** Measure startup and target scenes in GS-056, then split by actual loading phases rather than speculative package boundaries. Vite's advisory threshold is temporarily 850 kB so this known baseline does not appear as an unexplained build warning.
 
@@ -71,7 +71,15 @@ Last updated: 2026-08-06
 - **Severity:** High / P0 roadmap gap
 - **Status:** Resolved 2026-08-06
 - **Resolution:** GS-011 replaced the bounded authoritative log with a complete active-scenario ledger of typed, ordered, reason-coded events. UI copy and the recent-eight projection are non-authoritative. Resource deltas retain causal values, commands return correlated acceptance/rejection receipts, checkpoint version 2 hashes the full ledger, and replay reads it directly.
-- **Remaining boundary:** The only current command payload is `time-mode.set`; GS-012 adds serializable RNG and scenario replay, later systems add their command/event variants, GS-015 defines persistence/retention, and GS-035 derives morning reports from the ledger.
+- **Remaining boundary:** The only current command payload is `time-mode.set`; GS-012 adds serializable RNG and scenario replay without inventing random gameplay, later systems add their command/event variants, GS-015 defines persistence/retention, and GS-035 derives morning reports from the ledger.
+
+### KI-010 — Current presentation is fixed-size and lacks reusable modal structure
+
+- **Severity:** Medium / user-prioritized foundation gap
+- **Status:** Open
+- **Symptoms:** The current 1024×720 shell uses very small labels and clipping-prone fixed layout; `App.tsx` combines runtime orchestration with all HUD composition; time controls, fatigue, preview panels, dusk, and Beacon state need stronger semantics and world/HUD consistency. No reusable dialog or drawer owns keyboard/focus policy.
+- **Impact:** Adding grid, jobs, reports, dialogue, and scaled desktop UI now would compound a monolith and make later visual polish more expensive.
+- **Plan:** Complete GS-005, then GS-017/018 immediately after GS-012. Establish owned fonts, responsive tokens/layout, accessible controls/dialog/drawer primitives, phase/Beacon-consistent rendering, reduced-motion handling, honest preview labels, and deterministic screenshot fixtures. Defer real grid/jobs/power/threat/report/dialogue content to its owning system.
 
 ## Product and design risks
 

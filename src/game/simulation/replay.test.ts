@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { dispatchSimulationCommand } from './commands';
 import { createInitialState } from './createInitialState';
-import { runClockReplay, type ClockReplayV1 } from './replay';
+import {
+  GREAT_PLAINS_SCENARIO_ID,
+  GREAT_PLAINS_SCENARIO_VERSION,
+  runClockReplay,
+  runScenarioReplay,
+  type ClockReplayV1,
+  type ScenarioReplayV1,
+} from './replay';
+import { SEEDED_RANDOM_ALGORITHM, SEEDED_RANDOM_VERSION } from './random';
 
 const replayFixture = (): ClockReplayV1 => ({
   commands: [
@@ -20,6 +28,21 @@ const replayFixture = (): ClockReplayV1 => ({
   ],
   replayVersion: 1,
   seed: 1987,
+  stopAfterTick: 100,
+  targetNightCount: 3,
+});
+
+const scenarioReplayFixture = (): ScenarioReplayV1 => ({
+  commands: replayFixture().commands,
+  replayKind: 'scenario',
+  replayVersion: 1,
+  rng: {
+    algorithm: SEEDED_RANDOM_ALGORITHM,
+    seed: 1987,
+    version: SEEDED_RANDOM_VERSION,
+  },
+  scenarioId: GREAT_PLAINS_SCENARIO_ID,
+  scenarioVersion: GREAT_PLAINS_SCENARIO_VERSION,
   stopAfterTick: 100,
   targetNightCount: 3,
 });
@@ -53,6 +76,76 @@ describe('clock commands and replay', () => {
     expect(unchanged.receipt.emittedEventSequences).toEqual([]);
     expect(unchanged.state).toBe(started.state);
   });
+
+  it('replays versioned scenario metadata to identical authoritative results', () => {
+    const first = runScenarioReplay(scenarioReplayFixture());
+    const repeated = runScenarioReplay(scenarioReplayFixture());
+    const shuffled = runScenarioReplay({
+      ...scenarioReplayFixture(),
+      commands: [...scenarioReplayFixture().commands].reverse(),
+    });
+
+    expect(repeated).toEqual(first);
+    expect(shuffled).toEqual(first);
+    expect(first.eventLedger).toBe(first.state.eventLedger);
+    expect(first.finalRng).toBe(first.state.rng);
+    expect(first.finalRng.drawCount).toBe(0);
+    expect(first.eventLedger[0]).toMatchObject({
+      rngAlgorithm: SEEDED_RANDOM_ALGORITHM,
+      rngVersion: SEEDED_RANDOM_VERSION,
+      type: 'simulation.started',
+    });
+    expect(first.consumedCommandIds).toEqual(['start-clock', 'speed-up']);
+    expect(first.unconsumedCommandIds).toEqual([]);
+    expect(first.stopReason).toBe('tick-limit-reached');
+  });
+
+  it('changes RNG, state, ledger, and diagnostic hashes when the seed changes', () => {
+    const baseline = runScenarioReplay(scenarioReplayFixture());
+    const changed = runScenarioReplay({
+      ...scenarioReplayFixture(),
+      rng: { ...scenarioReplayFixture().rng, seed: 1988 },
+    });
+
+    expect(changed.finalRng).not.toEqual(baseline.finalRng);
+    expect(changed.state).not.toEqual(baseline.state);
+    expect(changed.eventLedger).not.toEqual(baseline.eventLedger);
+    expect(changed.stateHash).not.toBe(baseline.stateHash);
+    expect(changed.eventLedgerHash).not.toBe(baseline.eventLedgerHash);
+  });
+
+  it('reports slice completion without consuming RNG', () => {
+    const result = runScenarioReplay({
+      ...scenarioReplayFixture(),
+      commands: [scenarioReplayFixture().commands[0]].filter(
+        (command) => command !== undefined,
+      ),
+      stopAfterTick: 5_000,
+      targetNightCount: 1,
+    });
+
+    expect(result.stopReason).toBe('slice-completed');
+    expect(result.state.completedNights).toBe(1);
+    expect(result.finalRng.drawCount).toBe(0);
+  });
+
+  it.each([
+    [{ replayKind: 'clock' }, 'format'],
+    [{ scenarioId: 'unknown' }, 'scenario'],
+    [{ scenarioVersion: 2 }, 'scenario'],
+    [{ rng: { ...scenarioReplayFixture().rng, algorithm: 'unknown' } }, 'RNG'],
+    [{ rng: { ...scenarioReplayFixture().rng, version: 2 } }, 'RNG'],
+    [{ rng: { ...scenarioReplayFixture().rng, seed: -1 } }, 'rng.seed'],
+  ] as const)(
+    'rejects unsupported scenario replay metadata %#',
+    (override, message) => {
+      const invalid = {
+        ...scenarioReplayFixture(),
+        ...override,
+      } as unknown as ScenarioReplayV1;
+      expect(() => runScenarioReplay(invalid)).toThrow(message);
+    },
+  );
 
   it('replays the same commands to the same state, ledger, and hash', () => {
     const first = runClockReplay(replayFixture());
@@ -133,6 +226,8 @@ describe('clock commands and replay', () => {
     });
 
     expect(result.state.tick).toBe(0);
+    expect(result.stopReason).toBe('paused-with-no-reachable-command');
+    expect(result.consumedCommandIds).toEqual([]);
     expect(result.unconsumedCommandIds).toEqual(['unreachable-start']);
   });
 
