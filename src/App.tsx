@@ -7,6 +7,10 @@ import {
   presentDomainEvent,
   selectRecentDomainEvents,
 } from './game/presentation/domainEventPresentation';
+import {
+  beaconVisualStatusLabel,
+  selectStationVisualState,
+} from './game/presentation/stationVisualState';
 import { StationScene } from './game/rendering/StationScene';
 import { useSimulationRuntime } from './game/runtime/useSimulationRuntime';
 import { currentDayNumber } from './game/simulation/advanceSimulation';
@@ -55,12 +59,8 @@ export const App = () => {
         ? null
         : presentDomainEvent(topEvent)
       : presentCommandReceipt(lastCommandReceipt);
-  const beaconStatus =
-    simulation.resources.power <= 0
-      ? 'Dark'
-      : simulation.resources.power <= 25
-        ? 'Critical'
-        : 'Stable';
+  const stationVisualState = selectStationVisualState(simulation);
+  const beaconStatus = beaconVisualStatusLabel[stationVisualState.beaconStatus];
   const nightDisplay = Math.min(
     simulation.completedNights + 1,
     gameConfig.verticalSliceNightCount,
@@ -184,7 +184,7 @@ export const App = () => {
         </aside>
 
         <section className="world-panel">
-          <StationScene isNight={simulation.phase === 'night'} />
+          <StationScene visualState={stationVisualState} />
           <div className="location-stamp">
             <span>Regional station 01</span>
             <strong>{greatPlainsRegion.displayName}</strong>

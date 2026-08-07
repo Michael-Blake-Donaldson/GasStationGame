@@ -3,9 +3,16 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
+import type { StationVisualState } from './game/presentation/stationVisualState';
 
 vi.mock('./game/rendering/StationScene', () => ({
-  StationScene: () => <div data-testid="station-scene" />,
+  StationScene: ({ visualState }: { visualState: StationVisualState }) => (
+    <div
+      data-atmosphere={visualState.atmosphere}
+      data-beacon-status={visualState.beaconStatus}
+      data-testid="station-scene"
+    />
+  ),
 }));
 
 describe('App simulation timer', () => {
@@ -122,10 +129,14 @@ describe('App simulation timer', () => {
     const pausedButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="paused time"]',
     );
+    const stationScene = container.querySelector('[data-testid="station-scene"]');
     const guideButton = [
       ...container.querySelectorAll<HTMLButtonElement>('button'),
     ].find((button) => button.textContent.includes('Station guide'));
     expect(pausedButton?.getAttribute('aria-pressed')).toBe('true');
+    expect(stationScene?.getAttribute('data-atmosphere')).toBe('day');
+    expect(stationScene?.getAttribute('data-beacon-status')).toBe('stable');
+    expect(container.querySelector('.beacon-state strong')?.textContent).toBe('Stable');
     expect(guideButton).toBeDefined();
     if (guideButton === undefined) throw new Error('Station guide button is missing.');
 

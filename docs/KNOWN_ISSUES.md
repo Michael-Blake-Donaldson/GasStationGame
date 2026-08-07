@@ -30,7 +30,7 @@ Last updated: 2026-08-07
 
 - **Severity:** Medium
 - **Status:** Open
-- **Symptoms:** Current scene uses a few procedural meshes and lights, not target-scale entities, grass, weather, selection overlays, or threats.
+- **Symptoms:** The reviewed scene now has deterministic atmosphere/Beacon fixtures, retained on-demand rendering, and richer procedural station identity, but still lacks target-scale entities, animated grass/weather, selection overlays, and threats.
 - **Impact:** Three.js/Tauri may expose draw-call, shadow, WebView2, or isometric-readability limits later.
 - **Plan:** Instrument target-scale Great Plains scenes under GS-056; record any renderer decision change.
 
@@ -38,7 +38,7 @@ Last updated: 2026-08-07
 
 - **Severity:** Low
 - **Status:** Open
-- **Symptoms:** Visual appearance varies when Barlow Condensed or IBM Plex Mono is unavailable.
+- **Symptoms:** The presentation intentionally uses generic system sans/monospace stacks until licensed local files exist, so font metrics and appearance still vary across machines.
 - **Impact:** Screenshot baselines are not stable across machines.
 - **Workaround:** CSS provides sans-serif/monospace fallbacks.
 - **Plan:** Add repository-owned, license-documented font assets in GS-005 before visual baselines.
@@ -55,7 +55,7 @@ Last updated: 2026-08-07
 
 - **Severity:** Low
 - **Status:** Open
-- **Symptoms:** React, Tauri's title adapter, the deterministic simulation foundation, and the direct Three.js prototype currently produce one 815.49 kB minified JavaScript asset (218.98 kB gzip).
+- **Symptoms:** React, Tauri's title adapter, the deterministic simulation foundation, and the direct Three.js prototype currently produce one 818.18 kB minified JavaScript asset (219.89 kB gzip).
 - **Impact:** Startup is acceptable for the scaffold but may grow without an asset/scene loading boundary.
 - **Plan:** Measure startup and target scenes in GS-056, then split by actual loading phases rather than speculative package boundaries. Vite's advisory threshold is temporarily 850 kB so this known baseline does not appear as an unexplained build warning.
 

@@ -131,6 +131,8 @@ Before a playtest build is accepted, inspect the HUD, station guide, and event-h
 
 At each width, verify selected time mode without relying on color, visible focus, forward and reverse focus containment, Escape/backdrop dismissal, focus return, background inertness, intentional overlay scrolling, and no clipped essential resource. Record screenshots only after repository-owned typography makes cross-machine comparisons deterministic.
 
+For development review, run `pnpm dev` and open `/?visual-fixture=station&atmosphere=day&beacon=stable`. Review the complete Cartesian matrix using `day|dusk|night` and `stable|critical|dark`. Each fixture must create one canvas, expose the selected values in its accessible scene label, avoid fresh console warnings, and keep important station silhouettes readable. This route is development-only and must not appear in a production bundle.
+
 ## Issue severity
 
 - **Blocker:** Cannot complete or understand the core loop; data loss/crash; inaccessible required action.

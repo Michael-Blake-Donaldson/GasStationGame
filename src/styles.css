@@ -419,6 +419,28 @@ button:focus-visible,
   height: 100%;
 }
 
+.station-scene::after {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at 50% 45%,
+    transparent 48%,
+    rgba(8, 13, 12, 0.12)
+  );
+  content: '';
+  pointer-events: none;
+}
+
+.station-scene--dusk::after {
+  background:
+    linear-gradient(180deg, rgba(222, 139, 85, 0.08), transparent 45%),
+    radial-gradient(circle at 50% 45%, transparent 42%, rgba(20, 18, 20, 0.24));
+}
+
+.station-scene--night::after {
+  background: radial-gradient(circle at 48% 42%, transparent 32%, rgba(2, 8, 10, 0.42));
+}
+
 .station-scene canvas {
   display: block;
   width: 100%;
@@ -427,6 +449,7 @@ button:focus-visible,
 
 .scene-label {
   position: absolute;
+  z-index: 1;
   padding: 5px 8px;
   border: 1px solid rgba(255, 255, 255, 0.28);
   color: white;
@@ -449,6 +472,16 @@ button:focus-visible,
   top: 28%;
   right: 7%;
   color: #b9ffc6;
+}
+
+.scene-label--beacon[data-status='critical'] {
+  border-color: rgba(255, 197, 110, 0.56);
+  color: var(--amber);
+}
+
+.scene-label--beacon[data-status='dark'] {
+  border-color: rgba(239, 106, 85, 0.54);
+  color: #ff9c86;
 }
 
 .location-stamp {

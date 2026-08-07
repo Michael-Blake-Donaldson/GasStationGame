@@ -11,7 +11,7 @@ This repository contains the development foundation and a representative systems
 - strict TypeScript simulation code isolated from Three.js presentation;
 - a configurable player-facing title (`VITE_GAME_TITLE`);
 - validated Great Plains content data;
-- a responsive orthographic station HUD with accessible guide and event-history overlays;
+- a responsive orthographic station HUD with accessible overlays and deterministic day/dusk/night plus Beacon visual fixtures;
 - an integer fixed-step phase clock with typed commands/events, versioned seeded RNG, scenario replay fixtures, and deterministic state/ledger hashing;
 - Vite browser builds and a Tauri 2 Windows desktop shell;
 - repository guidance, project-scoped read-only review agents, and production planning documents.

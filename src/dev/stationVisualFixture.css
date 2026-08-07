@@ -1,0 +1,69 @@
+.visual-fixture-page {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  color: var(--cream);
+  background: #080d0c;
+}
+
+.visual-fixture-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--rule);
+  background: #0d1412;
+}
+
+.visual-fixture-header h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 30px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.visual-fixture-header dl {
+  display: flex;
+  gap: 24px;
+  margin: 0;
+}
+
+.visual-fixture-header dl div {
+  min-width: 110px;
+}
+
+.visual-fixture-header dt,
+.visual-fixture-header dd {
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.visual-fixture-header dt {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+
+.visual-fixture-header dd {
+  margin-top: 4px;
+  color: var(--amber);
+  font-size: 13px;
+}
+
+.visual-fixture-scene {
+  position: relative;
+  min-height: 0;
+}
+
+.visual-fixture-footer {
+  padding: 10px 20px;
+  border-top: 1px solid var(--rule);
+  color: var(--muted);
+  background: #0d1412;
+  font-size: 10px;
+}

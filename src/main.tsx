@@ -18,8 +18,22 @@ if (isTauri()) {
   void getCurrentWindow().setTitle(gameConfig.playerFacingTitle);
 }
 
-createRoot(rootElement).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+const root = createRoot(rootElement);
+const isStationVisualFixture =
+  import.meta.env.DEV &&
+  new URLSearchParams(window.location.search).get('visual-fixture') === 'station';
+
+if (isStationVisualFixture) {
+  const { StationVisualFixture } = await import('./dev/StationVisualFixture');
+  root.render(
+    <StrictMode>
+      <StationVisualFixture />
+    </StrictMode>,
+  );
+} else {
+  root.render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+}

@@ -84,3 +84,11 @@ Decisions are append-only. To change one, add a new decision that supersedes it 
 - **Context:** Grid, jobs, reports, and dialogue will add panels and overlays; duplicating focus and cadence behavior inside `App` would make those systems fragile.
 - **Decision:** Keep `App` as a presentation composition root. Isolate wall-clock cadence plus typed UI-command dispatch in `game/runtime`, and route dialogs/drawers through one portal primitive that owns background inertness, focus containment/return, Escape, backdrop dismissal, scroll locking, and narrow-screen sheet behavior. Event history remains a projection of the authoritative ledger.
 - **Consequences:** New overlays inherit one accessibility policy and cannot become alternate authoritative state. Presentation-specific open/closed state stays outside simulation and replay. Representative content may reuse the primitive, but each workflow still needs its own semantic and visual review.
+
+## DEC-011 — Derive one deterministic station visual state
+
+- **Date:** 2026-08-07
+- **Status:** Accepted
+- **Context:** HUD and world graphics can contradict each other if phase and Beacon presentation are derived independently, while screenshot testing cannot wait hours of wall time for each state.
+- **Decision:** Derive one pure `StationVisualState` from authoritative simulation phase and power, then pass it to both HUD and Three.js. Pin atmosphere and Beacon styles in pure tests and expose their nine combinations through a development-only query fixture. Retain one static renderer and redraw on initialization, resize, or visual-state changes instead of using a perpetual animation loop.
+- **Consequences:** Visual fixtures are deterministic and do not mutate or bypass simulation. Dark means zero Beacon point light and emissive output in every atmosphere. Future animated systems may add rendering cadence without changing authority, and production builds must exclude the fixture route. Repository-owned typography remains GS-005 before cross-machine pixel baselines are stable.
