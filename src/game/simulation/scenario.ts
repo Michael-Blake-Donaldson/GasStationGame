@@ -1,8 +1,9 @@
 import type { GridCoordinate, StationGridDefinition } from './grid';
 import type { BusinessDefinition } from './business';
+import type { ConstructionDefinition } from './construction';
 
 export const GREAT_PLAINS_SCENARIO_ID = 'great-plains' as const;
-export const GREAT_PLAINS_SCENARIO_VERSION = 5 as const;
+export const GREAT_PLAINS_SCENARIO_VERSION = 6 as const;
 
 export interface EmployeeSkillDefinition {
   readonly id: string;
@@ -37,6 +38,7 @@ export interface JobDefinition {
 
 export interface ScenarioDefinition {
   readonly business: BusinessDefinition;
+  readonly construction: readonly ConstructionDefinition[];
   readonly id: string;
   readonly initialEmployeePositions: readonly InitialEmployeePosition[];
   readonly jobs: readonly JobDefinition[];

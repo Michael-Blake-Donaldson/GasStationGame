@@ -1,9 +1,12 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import type { StationVisualState } from '../presentation/stationVisualState';
+import type { StationGridDefinition, StationOccupancyState } from '../simulation/grid';
 import { selectStationSceneStyle } from './stationSceneStyle';
 
 interface StationSceneProps {
+  readonly occupancy: StationOccupancyState;
+  readonly stationGrid: StationGridDefinition;
   readonly visualState: StationVisualState;
 }
 
@@ -14,6 +17,7 @@ interface StationGeometryHandles {
 }
 
 interface StationSceneRuntime extends StationGeometryHandles {
+  readonly constructionGroup: THREE.Group;
   readonly renderer: THREE.WebGLRenderer;
   readonly scene: THREE.Scene;
   readonly skyLight: THREE.HemisphereLight;
@@ -28,7 +32,7 @@ const INITIAL_VISUAL_STATE: StationVisualState = {
 };
 
 const addBox = (
-  scene: THREE.Scene,
+  scene: THREE.Object3D,
   size: readonly [number, number, number],
   position: readonly [number, number, number],
   color: THREE.ColorRepresentation,
@@ -73,8 +77,7 @@ const addStationGeometry = (scene: THREE.Scene): StationGeometryHandles => {
 
   addBox(scene, [10, 3.8, 7], [-4, 1.9, -1], '#d1b481');
   addBox(scene, [10.8, 0.5, 7.8], [-4, 4.05, -1], '#6f2c24');
-  addBox(scene, [4.8, 3.1, 5.4], [7, 1.55, -2], '#8a846e');
-  addBox(scene, [5.4, 0.45, 6], [7, 3.35, -2], '#46504b');
+  addBox(scene, [6.6, 0.12, 5.6], [8.5, 0.08, 2], '#756f5d');
   addBox(scene, [7.8, 0.22, 3.4], [-3.2, 3.05, 4], '#713026');
   for (const x of [-6.4, 0]) addBox(scene, [0.18, 3, 0.18], [x, 1.5, 4], '#4c4538');
 
@@ -113,7 +116,11 @@ const addStationGeometry = (scene: THREE.Scene): StationGeometryHandles => {
   return { beaconLight, beaconSignMaterial, storeLight };
 };
 
-export const StationScene = ({ visualState }: StationSceneProps) => {
+export const StationScene = ({
+  occupancy,
+  stationGrid,
+  visualState,
+}: StationSceneProps) => {
   const hostRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<StationSceneRuntime>(null);
   const { atmosphere, beaconStatus } = visualState;
@@ -158,10 +165,14 @@ export const StationScene = ({ visualState }: StationSceneProps) => {
     scene.add(sun);
 
     const geometry = addStationGeometry(scene);
+    const constructionGroup = new THREE.Group();
+    constructionGroup.name = 'constructed-station-shells';
+    scene.add(constructionGroup);
 
     const render = () => renderer.render(scene, camera);
     runtimeRef.current = {
       ...geometry,
+      constructionGroup,
       render,
       renderer,
       scene,
@@ -208,6 +219,67 @@ export const StationScene = ({ visualState }: StationSceneProps) => {
   useEffect(() => {
     const runtime = runtimeRef.current;
     if (runtime === null) return;
+    for (const child of [...runtime.constructionGroup.children]) {
+      runtime.constructionGroup.remove(child);
+      if (child instanceof THREE.Mesh) {
+        const mesh = child as THREE.Mesh;
+        mesh.geometry.dispose();
+        const materials = Array.isArray(mesh.material)
+          ? mesh.material
+          : [mesh.material];
+        materials.forEach((material) => material.dispose());
+      }
+    }
+
+    const colors: Readonly<Record<string, THREE.ColorRepresentation>> = {
+      'ammo-storage': '#78654c',
+      floodlight: '#e7c56d',
+      gate: '#6e5542',
+      'generator-upgrade': '#657066',
+      'repair-station': '#9a714d',
+      turret: '#5d6864',
+      wall: '#756653',
+    };
+    for (const occupant of occupancy.occupants) {
+      if (!occupant.id.startsWith('built-')) continue;
+      const plot =
+        occupant.placement === 'authored-plot'
+          ? stationGrid.authoredPlots.find(({ id }) => id === occupant.plotId)
+          : undefined;
+      const origin =
+        occupant.placement === 'authored-plot' ? plot?.origin : occupant.origin;
+      const footprint =
+        occupant.placement === 'authored-plot' ? plot?.footprint : occupant.footprint;
+      const rotation =
+        occupant.placement === 'authored-plot'
+          ? (plot?.rotation ?? 0)
+          : occupant.rotation;
+      if (origin === undefined || footprint === undefined) continue;
+      const width = rotation % 2 === 0 ? footprint.width : footprint.height;
+      const depth = rotation % 2 === 0 ? footprint.height : footprint.width;
+      const structureId =
+        occupant.placement === 'authored-plot'
+          ? occupant.facilityId
+          : occupant.structureId;
+      const height = occupant.placement === 'authored-plot' ? 2.4 : 0.7;
+      const mesh = addBox(
+        runtime.constructionGroup,
+        [width * 0.92, height, depth * 0.92],
+        [
+          origin.x + width / 2 - stationGrid.width / 2,
+          height / 2,
+          origin.z + depth / 2 - stationGrid.height / 2,
+        ],
+        colors[structureId] ?? '#8b7659',
+      );
+      mesh.name = occupant.id;
+    }
+    runtime.render();
+  }, [occupancy, stationGrid]);
+
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    if (runtime === null) return;
 
     const style = selectStationSceneStyle({ atmosphere, beaconStatus });
     if (runtime.scene.background instanceof THREE.Color) {
@@ -244,6 +316,10 @@ export const StationScene = ({ visualState }: StationSceneProps) => {
         data-status={visualState.beaconStatus}
       >
         Beacon {visualState.beaconStatus}
+      </div>
+      <div aria-live="polite" className="scene-construction-status">
+        {occupancy.occupants.filter(({ id }) => id.startsWith('built-')).length} new
+        construction shells
       </div>
     </div>
   );

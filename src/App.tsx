@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Modal } from './components/Modal';
 import { OperationsModal } from './components/OperationsModal';
+import { ConstructionModal } from './components/ConstructionModal';
 import { gameConfig } from './config/game';
 import { greatPlainsRegion } from './content/regions/greatPlains';
 import {
@@ -21,6 +22,7 @@ import {
   wholeMinuteForClockUnit,
 } from './game/simulation/clock';
 import type { TimeMode } from './game/simulation/types';
+import { greatPlainsSimulationContext } from './game/scenarios/greatPlains';
 
 const RESOURCE_LABELS = [
   ['cash', 'Cash', '$'],
@@ -50,6 +52,7 @@ export const App = () => {
   const [isGuideOpen, setGuideOpen] = useState(false);
   const [isHistoryOpen, setHistoryOpen] = useState(false);
   const [isOperationsOpen, setOperationsOpen] = useState(false);
+  const [isConstructionOpen, setConstructionOpen] = useState(false);
   const {
     assignJob,
     cancelJob,
@@ -57,6 +60,7 @@ export const App = () => {
     isRecoveryReady,
     lastCommandReceipt,
     orderInventory,
+    placeConstruction,
     setRetailPrice,
     simulation,
   } = useSimulationRuntime({
@@ -203,10 +207,21 @@ export const App = () => {
           >
             Open shift board
           </button>
+          <button
+            className="outline-button"
+            onClick={() => setConstructionOpen(true)}
+            type="button"
+          >
+            Open construction
+          </button>
         </aside>
 
         <section className="world-panel">
-          <StationScene visualState={stationVisualState} />
+          <StationScene
+            occupancy={simulation.stationOccupancy}
+            stationGrid={greatPlainsSimulationContext.scenario.stationGridDefinition}
+            visualState={stationVisualState}
+          />
           <div className="location-stamp">
             <span>Regional station 01</span>
             <strong>{greatPlainsRegion.displayName}</strong>
@@ -312,7 +327,8 @@ export const App = () => {
           <strong>Keep the station useful. Keep the beacon visible.</strong>
           <p>
             The Great Plains prototype currently demonstrates the station clock,
-            deterministic simulation, routine customers, and station operations.
+            deterministic simulation, routine customers, station operations, and
+            structural construction.
           </p>
         </div>
         <div className="guide-grid">
@@ -330,6 +346,14 @@ export const App = () => {
           </section>
           <section>
             <span className="guide-number">03</span>
+            <h3>Prepare the grounds</h3>
+            <p>
+              Preview exact cost and occupied cells before placing a facility or
+              flexible structure. Current shells do not yet operate equipment.
+            </p>
+          </section>
+          <section>
+            <span className="guide-number">04</span>
             <h3>Control the clock</h3>
             <p>Pause or change speed during the day. Night restricts unsafe modes.</p>
           </section>
@@ -350,6 +374,14 @@ export const App = () => {
         onClose={() => setOperationsOpen(false)}
         onOrderInventory={orderInventory}
         onSetRetailPrice={setRetailPrice}
+        simulation={simulation}
+      />
+
+      <ConstructionModal
+        isOpen={isConstructionOpen}
+        isRecoveryReady={isRecoveryReady}
+        onClose={() => setConstructionOpen(false)}
+        onPlaceConstruction={placeConstruction}
         simulation={simulation}
       />
 

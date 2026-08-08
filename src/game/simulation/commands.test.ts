@@ -277,6 +277,113 @@ describe('simulation command dispatch', () => {
     });
   });
 
+  it('places construction with exact cost, canonical identity, and event facts', () => {
+    const initial = createInitialState();
+    const result = dispatchSimulationCommand(initial, {
+      atTick: 0,
+      command: {
+        blueprintId: 'wall',
+        placement: { kind: 'flexible', origin: { x: 0, z: 4 }, rotation: 0 },
+        type: 'construction.place',
+      },
+      id: 'build-wall',
+      sequence: 0,
+    });
+
+    expect(result.receipt).toMatchObject({
+      changed: true,
+      emittedEventSequences: [1],
+      reason: 'construction-placed',
+      status: 'accepted',
+    });
+    expect(result.state.nextConstructionSequence).toBe(1);
+    expect(result.state.resources).toMatchObject({ cash: 420, scrap: 30 });
+    expect(result.state.stationOccupancy.occupants.at(0)).toMatchObject({
+      id: 'beacon-sign',
+    });
+    expect(
+      result.state.stationOccupancy.occupants.find(({ id }) => id === 'built-wall-0'),
+    ).toMatchObject({
+      footprint: { height: 1, width: 1 },
+      origin: { x: 0, z: 4 },
+      placement: 'flexible',
+      rotation: 0,
+      structureId: 'wall',
+    });
+    expect(result.state.eventLedger.at(-1)).toMatchObject({
+      blueprintId: 'wall',
+      cells: [{ x: 0, z: 4 }],
+      constructionSequence: 0,
+      costChanges: [
+        { after: 420, before: 420, cost: 0, resource: 'cash' },
+        { after: 30, before: 32, cost: 2, resource: 'scrap' },
+      ],
+      occupant: { id: 'built-wall-0' },
+      type: 'construction.placed',
+    });
+  });
+
+  it('rechecks stale placement and leaves rejected construction byte-identical', () => {
+    const initial = createInitialState();
+    const command = {
+      blueprintId: 'wall',
+      placement: {
+        kind: 'flexible' as const,
+        origin: { x: 0, z: 4 },
+        rotation: 0 as const,
+      },
+      type: 'construction.place' as const,
+    };
+    const first = dispatchSimulationCommand(initial, {
+      atTick: 0,
+      command,
+      id: 'first-wall',
+      sequence: 0,
+    });
+    const second = dispatchSimulationCommand(first.state, {
+      atTick: 0,
+      command,
+      id: 'stale-wall',
+      sequence: 1,
+    });
+
+    expect(second.state).toBe(first.state);
+    expect(second.receipt).toMatchObject({
+      changed: false,
+      reason: 'cell-occupied',
+      status: 'rejected',
+    });
+  });
+
+  it('rejects construction outside day operations and malformed client geometry', () => {
+    const night = runningNight();
+    const closed = dispatchSimulationCommand(night, {
+      atTick: night.tick,
+      command: {
+        blueprintId: 'wall',
+        placement: { kind: 'flexible', origin: { x: 0, z: 4 }, rotation: 0 },
+        type: 'construction.place',
+      },
+      id: 'night-wall',
+      sequence: 0,
+    });
+    expect(closed.state).toBe(night);
+    expect(closed.receipt.reason).toBe('construction-closed');
+
+    const invalid = dispatchSimulationCommand(createInitialState(), {
+      atTick: 0,
+      command: {
+        blueprintId: 'wall',
+        footprint: { height: 99, width: 99 },
+        placement: { kind: 'flexible', origin: { x: 0, z: 4 }, rotation: 9 },
+        type: 'construction.place',
+      },
+      id: 'forged-wall',
+      sequence: 1,
+    });
+    expect(invalid.receipt.reason).toBe('invalid-command-payload');
+  });
+
   it('keeps the dispatcher exhaustive while rejecting unknown command types', () => {
     const initial = createInitialState();
     const unknown = {

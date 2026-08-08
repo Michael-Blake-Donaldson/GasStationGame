@@ -147,6 +147,8 @@ describe('App simulation timer', () => {
 
     const dialog = document.querySelector('[role="dialog"]');
     expect(dialog?.textContent).toContain('Keep the station useful.');
+    expect(dialog?.textContent).toContain('Preview exact cost and occupied cells');
+    expect(dialog?.textContent).toContain('shells do not yet operate equipment');
     expect(document.activeElement?.getAttribute('aria-label')).toBe(
       'Close Station guide',
     );

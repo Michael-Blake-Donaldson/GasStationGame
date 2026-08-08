@@ -32,6 +32,14 @@ const assertEventContentReferences = (
   context: SimulationContext,
   employeeIds: ReadonlySet<string>,
 ): void => {
+  if (event.type === 'construction.placed') {
+    if (!context.scenario.construction.some(({ id }) => id === event.blueprintId)) {
+      throw new RangeError(
+        `Event ${String(event.sequence)} references an unknown construction blueprint.`,
+      );
+    }
+    return;
+  }
   if (event.type === 'service.started' || event.type === 'service.interrupted') {
     const serviceEmployeeId =
       event.type === 'service.started'
@@ -82,6 +90,10 @@ export const assertSimulationState = (
     throw new RangeError('clockStepRemainderTimeUnits exceeds one slow clock unit.');
   }
   assertNonNegativeSafeInteger(state.completedNights, 'completedNights');
+  assertNonNegativeSafeInteger(
+    state.nextConstructionSequence,
+    'nextConstructionSequence',
+  );
   assertNonNegativeSafeInteger(state.nextEventSequence, 'nextEventSequence');
   assertNonNegativeSafeInteger(state.seed, 'seed');
   assertNonNegativeSafeInteger(state.tick, 'tick');

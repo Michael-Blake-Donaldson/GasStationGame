@@ -16,6 +16,17 @@ describe('region content schema', () => {
     expect(greatPlainsRegion.initialEmployeePositions).toHaveLength(4);
     expect(greatPlainsRegion.workTargets).toHaveLength(4);
     expect(greatPlainsRegion.jobs).toHaveLength(6);
+    expect(greatPlainsRegion.construction.map(({ id }) => id)).toEqual([
+      'ammo-storage',
+      'floodlight',
+      'garage',
+      'gate',
+      'generator-upgrade',
+      'main-store',
+      'repair-station',
+      'turret',
+      'wall',
+    ]);
     expect(() =>
       assertStationGridDefinition(greatPlainsRegion.stationGrid),
     ).not.toThrow();

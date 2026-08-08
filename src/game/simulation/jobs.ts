@@ -10,6 +10,7 @@ import {
 } from './grid';
 import { findStationPath } from './pathfinding';
 import { assertBusinessDefinition } from './business';
+import { assertConstructionDefinitions } from './construction';
 import type {
   JobDefinition,
   ScenarioDefinition,
@@ -81,6 +82,7 @@ export const assertScenarioDefinition = (scenario: ScenarioDefinition): void => 
   assertPositiveSafeInteger(scenario.version, 'scenario.version');
   assertStationGridDefinition(scenario.stationGridDefinition);
   assertBusinessDefinition(scenario.business);
+  assertConstructionDefinitions(scenario.construction, scenario.stationGridDefinition);
   assertUniqueIds(scenario.workTargets, 'scenario.workTargets');
   assertUniqueIds(scenario.jobs, 'scenario.jobs');
 

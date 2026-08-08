@@ -4,7 +4,7 @@ import { SIMULATION_CHECKPOINT_VERSION } from '../simulation/checkpoint';
 import { SEEDED_RANDOM_ALGORITHM, SEEDED_RANDOM_VERSION } from '../simulation/random';
 
 export const SAVE_FORMAT_ID = 'station-campaign-save' as const;
-export const SAVE_SCHEMA_VERSION = 3 as const;
+export const SAVE_SCHEMA_VERSION = 4 as const;
 export const SAVE_CHECKSUM_ALGORITHM = 'fnv1a32' as const;
 export const SAVE_SETTINGS_VERSION = 1 as const;
 export const SAVE_DIFFICULTY_VERSION = 1 as const;
@@ -497,6 +497,39 @@ export const simulationCheckpointV7Schema = simulationCheckpointV6Schema.extend(
   business: businessStateV7,
   employees: z.array(employeeV7),
   eventLedger: z.array(domainEventV7).min(1),
+  version: z.literal(7),
+});
+
+const constructionPlacedEvent = eventBase
+  .extend({
+    blueprintId: technicalId,
+    cells: z.array(coordinate).min(1),
+    constructionSequence: nonNegativeSafeInteger,
+    costChanges: z
+      .array(
+        z
+          .object({
+            after: nonNegativeSafeInteger,
+            before: nonNegativeSafeInteger,
+            cost: nonNegativeSafeInteger,
+            resource: z.enum(['cash', 'scrap']),
+          })
+          .strict(),
+      )
+      .length(2),
+    occupant,
+    reason: z.literal('player-request'),
+    type: z.literal('construction.placed'),
+  })
+  .strict();
+const domainEventV8 = z.discriminatedUnion('type', [
+  ...domainEventV7.options,
+  constructionPlacedEvent,
+]);
+
+export const simulationCheckpointV8Schema = simulationCheckpointV7Schema.extend({
+  eventLedger: z.array(domainEventV8).min(1),
+  nextConstructionSequence: nonNegativeSafeInteger,
   version: z.literal(SIMULATION_CHECKPOINT_VERSION),
 });
 
@@ -562,11 +595,27 @@ export const saveDocumentV2Schema = savePayloadV2Schema
   .strict();
 
 export const savePayloadV3Schema = savePayloadV2Schema.extend({
-  schemaVersion: z.literal(SAVE_SCHEMA_VERSION),
+  schemaVersion: z.literal(3),
   station: simulationCheckpointV7Schema,
 });
 
 export const saveDocumentV3Schema = savePayloadV3Schema
+  .extend({
+    checksum: z
+      .object({
+        algorithm: z.literal(SAVE_CHECKSUM_ALGORITHM),
+        value: z.string().regex(/^[0-9a-f]{8}$/u),
+      })
+      .strict(),
+  })
+  .strict();
+
+export const savePayloadV4Schema = savePayloadV3Schema.extend({
+  schemaVersion: z.literal(SAVE_SCHEMA_VERSION),
+  station: simulationCheckpointV8Schema,
+});
+
+export const saveDocumentV4Schema = savePayloadV4Schema
   .extend({
     checksum: z
       .object({
@@ -583,3 +632,5 @@ export type SaveDocumentV2 = z.infer<typeof saveDocumentV2Schema>;
 export type SavePayloadV2 = z.infer<typeof savePayloadV2Schema>;
 export type SaveDocumentV3 = z.infer<typeof saveDocumentV3Schema>;
 export type SavePayloadV3 = z.infer<typeof savePayloadV3Schema>;
+export type SaveDocumentV4 = z.infer<typeof saveDocumentV4Schema>;
+export type SavePayloadV4 = z.infer<typeof savePayloadV4Schema>;

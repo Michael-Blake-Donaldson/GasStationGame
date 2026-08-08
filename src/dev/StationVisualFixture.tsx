@@ -1,9 +1,14 @@
 import { StationScene } from '../game/rendering/StationScene';
+import {
+  createInitialState,
+  greatPlainsSimulationContext,
+} from '../game/scenarios/greatPlains';
 import { readStationVisualFixture } from './stationVisualFixtureState';
 import './stationVisualFixture.css';
 
 export const StationVisualFixture = () => {
   const visualState = readStationVisualFixture(window.location.search);
+  const occupancy = createInitialState().stationOccupancy;
 
   return (
     <main className="visual-fixture-page">
@@ -24,7 +29,11 @@ export const StationVisualFixture = () => {
         </dl>
       </header>
       <section className="visual-fixture-scene">
-        <StationScene visualState={visualState} />
+        <StationScene
+          occupancy={occupancy}
+          stationGrid={greatPlainsSimulationContext.scenario.stationGridDefinition}
+          visualState={visualState}
+        />
       </section>
       <footer className="visual-fixture-footer">
         Development-only fixture. Query values: atmosphere=day|dusk|night and

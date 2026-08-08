@@ -1,5 +1,5 @@
 import type { SeededRandomState } from './random';
-import type { GridCoordinate, StationOccupancyState } from './grid';
+import type { GridCoordinate, PlacedOccupant, StationOccupancyState } from './grid';
 import type { BusinessState } from './business';
 import type { ServicePerformanceSnapshot } from './employeePerformance';
 
@@ -225,6 +225,20 @@ export type DomainEvent =
       totalCost: number;
       type: 'inventory.ordered';
       wholesaleUnitCost: number;
+    })
+  | (DomainEventBase & {
+      blueprintId: string;
+      cells: readonly GridCoordinate[];
+      constructionSequence: number;
+      costChanges: readonly {
+        readonly after: number;
+        readonly before: number;
+        readonly cost: number;
+        readonly resource: 'cash' | 'scrap';
+      }[];
+      occupant: PlacedOccupant;
+      reason: 'player-request';
+      type: 'construction.placed';
     });
 
 export interface SimulationState {
@@ -235,6 +249,7 @@ export interface SimulationState {
   employees: readonly Employee[];
   eventLedger: readonly DomainEvent[];
   isSliceComplete: boolean;
+  nextConstructionSequence: number;
   nextEventSequence: number;
   phase: SimulationPhase;
   rng: SeededRandomState;

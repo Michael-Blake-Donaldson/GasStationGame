@@ -46,6 +46,85 @@
       { "startMinute": 990, "endMinute": 1080, "intervalMinutes": 5 }
     ]
   },
+  "construction": [
+    {
+      "id": "ammo-storage",
+      "displayName": "Ammo storage",
+      "placement": "flexible",
+      "structureId": "ammo-storage",
+      "footprint": { "width": 2, "height": 2 },
+      "allowedRotations": [0, 1, 2, 3],
+      "cost": { "cash": 24, "scrap": 6 }
+    },
+    {
+      "id": "floodlight",
+      "displayName": "Floodlight",
+      "placement": "flexible",
+      "structureId": "floodlight",
+      "footprint": { "width": 1, "height": 1 },
+      "allowedRotations": [0, 1, 2, 3],
+      "cost": { "cash": 18, "scrap": 4 }
+    },
+    {
+      "id": "garage",
+      "displayName": "Garage",
+      "placement": "authored-plot",
+      "facilityId": "facility-garage",
+      "cost": { "cash": 120, "scrap": 16 }
+    },
+    {
+      "id": "gate",
+      "displayName": "Gate",
+      "placement": "flexible",
+      "structureId": "gate",
+      "footprint": { "width": 1, "height": 2 },
+      "allowedRotations": [0, 1, 2, 3],
+      "cost": { "cash": 8, "scrap": 3 }
+    },
+    {
+      "id": "generator-upgrade",
+      "displayName": "Generator upgrade",
+      "placement": "flexible",
+      "structureId": "generator-upgrade",
+      "footprint": { "width": 2, "height": 2 },
+      "allowedRotations": [0, 1, 2, 3],
+      "cost": { "cash": 50, "scrap": 12 }
+    },
+    {
+      "id": "main-store",
+      "displayName": "Main store",
+      "placement": "authored-plot",
+      "facilityId": "facility-main-store",
+      "cost": { "cash": 160, "scrap": 24 }
+    },
+    {
+      "id": "repair-station",
+      "displayName": "Repair station",
+      "placement": "flexible",
+      "structureId": "repair-station",
+      "footprint": { "width": 2, "height": 3 },
+      "allowedRotations": [0, 1, 2, 3],
+      "cost": { "cash": 32, "scrap": 8 }
+    },
+    {
+      "id": "turret",
+      "displayName": "Turret",
+      "placement": "flexible",
+      "structureId": "turret",
+      "footprint": { "width": 1, "height": 1 },
+      "allowedRotations": [0, 1, 2, 3],
+      "cost": { "cash": 40, "scrap": 10 }
+    },
+    {
+      "id": "wall",
+      "displayName": "Wall",
+      "placement": "flexible",
+      "structureId": "wall",
+      "footprint": { "width": 1, "height": 1 },
+      "allowedRotations": [0, 1, 2, 3],
+      "cost": { "cash": 0, "scrap": 2 }
+    }
+  ],
   "initialEmployeePositions": [
     {
       "employeeId": "employee-ada",

@@ -9,7 +9,7 @@ Last updated: 2026-08-08
 - **Severity:** Expected / P0 roadmap gap
 - **Status:** Partially resolved 2026-08-08
 - **Progress:** GS-020 connects routine customers, pump/checkout staffing, prices, inventory orders, queue totals, served totals, resources, receipts, and event history through the authoritative command/event foundation. GS-021 adds inspectable pump/checkout skill, fatigue, exact duration/error arithmetic, attributed active service, interruption/requeue, and deterministic rework.
-- **Remaining boundary:** Power allocation, camera controls, threat tags, and most station objects remain previews until GS-022 and GS-030 through GS-035. The current build has a playable day-business loop, not a complete vertical slice.
+- **Remaining boundary:** Construction now creates authoritative, saved structural shells, but their power, defense, storage, gate, repair, and utility effects remain previews until GS-030 through GS-035. Camera controls and threat tags also remain future work. The current build has a playable day-business loop, not a complete vertical slice.
 
 ### KI-002 — Simulation clock is not yet a replay-grade fixed-step engine
 
@@ -84,9 +84,17 @@ Last updated: 2026-08-08
 
 - **Severity:** Expected / P0 roadmap gap
 - **Status:** Open
-- **Symptoms:** Great Plains occupancy, interaction cells, employee routes, and job progress are deterministic and replayable. GS-020 exposes pump/checkout assignments and cancellation in the shift board, but employees and routes are not rendered in the procedural station scene, which is not yet generated from authoritative occupancy.
+- **Symptoms:** Great Plains occupancy, interaction cells, employee routes, and job progress are deterministic and replayable. GS-020 exposes pump/checkout assignments and cancellation in the shift board, and GS-022 renders authoritative constructed shells, but employees and routes are not rendered in the procedural station scene.
 - **Impact:** Staffing is playable and inspectable in text, but travel and placement feedback are not visible in the world.
-- **Plan:** Project employees and selection/path feedback downstream of simulation state; GS-022/023 add construction and construction-time path validation without letting placeholder art dictate domain geometry.
+- **Plan:** Project employees and selection/path feedback downstream of simulation state; GS-023 adds whole-layout construction-time path validation without letting placeholder art dictate domain geometry.
+
+### KI-013 — Constructed objects are provisional structural shells
+
+- **Severity:** Expected / P0 roadmap gap
+- **Status:** Open
+- **Symptoms:** GS-022 places, saves, replays, and renders every required Great Plains construction blueprint, but constructed gates, lights, turrets, storage, repair, and generator upgrades do not yet change utilities, defense, inventory capacity, access, or repair behavior. Numeric footprints and cash/scrap costs are provisional because the GDD does not specify them.
+- **Impact:** Players can test placement clarity and opportunity cost, but cannot yet judge final balance or nighttime consequence from construction alone.
+- **Plan:** Validate whole-layout access in GS-023, then connect the same authoritative occupants to power, defense, ammunition, damage, and repair systems in GS-030 through GS-035. Tune provisional values through playtest rather than presenting them as GDD canon.
 
 ### KI-012 — Employee performance is intentionally static and retail-scoped
 
@@ -108,7 +116,7 @@ Establish alert priority, causal event history, camera cues, and failure explana
 
 ### KR-003 — Flexible construction can break navigation and utility connections
 
-Use deterministic occupancy, reserved interaction cells, path validation, segmented circuits, and explicit unreachable/ disconnected placement feedback.
+GS-022 now blocks occupied/reserved cells, current employee cells, and remaining active routes with deterministic feedback. GS-023 must preserve required whole-layout routes for future assignments, and later power work must validate segmented circuits and explain disconnected placement.
 
 ### KR-004 — Event logs and morning reports can diverge
 

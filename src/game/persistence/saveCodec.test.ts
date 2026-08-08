@@ -19,6 +19,7 @@ import {
 import type { GameSaveSnapshot, SaveIssueCode } from './saveCodec';
 import initialSaveFixture from './fixtures/save-v1-initial.json?raw';
 import initialSaveV2Fixture from './fixtures/save-v2-initial.json?raw';
+import initialSaveV3Fixture from './fixtures/save-v3-initial.json?raw';
 
 const advanceSimulationByClockUnits = (
   state: SimulationState,
@@ -41,8 +42,8 @@ const snapshotFor = (
 
 const expectSuccessfulLoad = (serialized: string) => {
   const loaded = decodeGameSave(serialized);
+  if (!loaded.ok) throw new Error(JSON.stringify(loaded.issues));
   expect(loaded.ok).toBe(true);
-  if (!loaded.ok) throw new Error(loaded.issues[0]?.detail ?? 'Save load failed.');
   return loaded;
 };
 
@@ -80,6 +81,7 @@ const downgradeCurrentSaveToV2 = (serialized: string): string =>
     const station = asRecord(document.station, 'station');
     station.version = 6;
     station.scenarioVersion = 4;
+    delete station.nextConstructionSequence;
     const business = asRecord(station.business, 'business');
     delete business.performanceBaselineReason;
     delete business.performanceStartsAtClockUnit;
@@ -141,16 +143,19 @@ const staffedBusinessState = (clockUnits: number): SimulationState => {
 };
 
 describe('versioned game save codec', () => {
-  it('loads the frozen v1 fixture and writes current v3 saves', () => {
+  it('loads the frozen v1-v3 fixtures and writes current v4 saves', () => {
     const serialized = encodeGameSave(snapshotFor(createInitialState(), 0, 0));
     expect(JSON.parse(serialized)).toMatchObject({
-      schemaVersion: 3,
-      station: { version: 7 },
+      schemaVersion: 4,
+      station: { version: 8 },
     });
     expect(expectSuccessfulLoad(initialSaveFixture).simulation).toEqual(
       createInitialState(),
     );
     expect(expectSuccessfulLoad(initialSaveV2Fixture).simulation).toEqual(
+      createInitialState(),
+    );
+    expect(expectSuccessfulLoad(initialSaveV3Fixture).simulation).toEqual(
       createInitialState(),
     );
     expect(expectSuccessfulLoad(serialized).simulation).toEqual(createInitialState());
@@ -217,7 +222,7 @@ describe('versioned game save codec', () => {
       },
       nextEventSequence: 1,
       resources: createInitialState().resources,
-      scenarioVersion: 5,
+      scenarioVersion: 6,
     });
     expect(migrated.simulation.eventLedger).toHaveLength(1);
   });
@@ -317,7 +322,7 @@ describe('versioned game save codec', () => {
       downgradeCurrentSaveToV2(encodeGameSave(snapshotFor(midService, 2, 10))),
     );
 
-    expect(loaded.simulation.scenarioVersion).toBe(5);
+    expect(loaded.simulation.scenarioVersion).toBe(6);
     expect(loaded.simulation.business).toMatchObject({
       performanceBaselineReason: 'legacy-save-migration',
       performanceStartsAtClockUnit: midService.absoluteClockUnit + 1,
@@ -365,6 +370,168 @@ describe('versioned game save codec', () => {
     expect(
       expectSuccessfulLoad(encodeGameSave(snapshotFor(ordered))).simulation,
     ).toEqual(ordered);
+  });
+
+  it('round-trips mixed construction and preserves the next canonical identity', () => {
+    const initial = createInitialState();
+    const garage = dispatchSimulationCommand(initial, {
+      atTick: 0,
+      command: {
+        blueprintId: 'garage',
+        placement: { kind: 'authored-plot', plotId: 'garage-plot' },
+        type: 'construction.place',
+      },
+      id: 'save-garage',
+      sequence: 0,
+    }).state;
+    const built = dispatchSimulationCommand(garage, {
+      atTick: 0,
+      command: {
+        blueprintId: 'gate',
+        placement: { kind: 'flexible', origin: { x: 0, z: 4 }, rotation: 1 },
+        type: 'construction.place',
+      },
+      id: 'save-gate',
+      sequence: 1,
+    }).state;
+    const loaded = expectSuccessfulLoad(encodeGameSave(snapshotFor(built)));
+
+    expect(loaded.simulation).toEqual(built);
+    expect(loaded.simulation.nextConstructionSequence).toBe(2);
+    expect(loaded.simulation.stationOccupancy.occupants).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'built-garage-0' }),
+        expect.objectContaining({ id: 'built-gate-1', rotation: 1 }),
+      ]),
+    );
+  });
+
+  it('rejects a forged construction cost with a fresh checksum', () => {
+    const built = dispatchSimulationCommand(createInitialState(), {
+      atTick: 0,
+      command: {
+        blueprintId: 'wall',
+        placement: { kind: 'flexible', origin: { x: 0, z: 4 }, rotation: 0 },
+        type: 'construction.place',
+      },
+      id: 'forged-wall-source',
+      sequence: 0,
+    }).state;
+    const forged = mutateSave(encodeGameSave(snapshotFor(built)), (document) => {
+      const station = asRecord(document.station, 'station');
+      const event = (station.eventLedger as Record<string, unknown>[]).find(
+        ({ type }) => type === 'construction.placed',
+      );
+      if (event === undefined) throw new Error('Construction event is missing.');
+      const changes = event.costChanges as Record<string, unknown>[];
+      const scrap = changes[1];
+      if (scrap === undefined) throw new Error('Scrap cost is missing.');
+      scrap.cost = 1;
+    });
+
+    expectFailureCode(forged, 'semantic-invariant-failed');
+  });
+
+  it.each([
+    {
+      label: 'event cells',
+      mutate: (station: Record<string, unknown>) => {
+        const event = (station.eventLedger as Record<string, unknown>[]).find(
+          ({ type }) => type === 'construction.placed',
+        );
+        if (event === undefined) throw new Error('Construction event is missing.');
+        event.cells = [{ x: 1, z: 4 }];
+      },
+    },
+    {
+      label: 'event occupant geometry',
+      mutate: (station: Record<string, unknown>) => {
+        const event = (station.eventLedger as Record<string, unknown>[]).find(
+          ({ type }) => type === 'construction.placed',
+        );
+        if (event === undefined) throw new Error('Construction event is missing.');
+        asRecord(event.occupant, 'construction occupant').origin = { x: 1, z: 4 };
+      },
+    },
+    {
+      label: 'final occupancy',
+      mutate: (station: Record<string, unknown>) => {
+        const occupancy = asRecord(station.stationOccupancy, 'station occupancy');
+        const occupant = (occupancy.occupants as Record<string, unknown>[]).find(
+          ({ id }) => id === 'built-wall-0',
+        );
+        if (occupant === undefined) throw new Error('Constructed occupant is missing.');
+        occupant.origin = { x: 1, z: 4 };
+      },
+    },
+    {
+      label: 'construction cursor',
+      mutate: (station: Record<string, unknown>) => {
+        station.nextConstructionSequence = 2;
+      },
+    },
+  ])('rejects forged construction $label with a fresh checksum', ({ mutate }) => {
+    const built = dispatchSimulationCommand(createInitialState(), {
+      atTick: 0,
+      command: {
+        blueprintId: 'wall',
+        placement: { kind: 'flexible', origin: { x: 0, z: 4 }, rotation: 0 },
+        type: 'construction.place',
+      },
+      id: 'forged-wall-facts-source',
+      sequence: 0,
+    }).state;
+    const forged = mutateSave(encodeGameSave(snapshotFor(built)), (document) => {
+      mutate(asRecord(document.station, 'station'));
+    });
+
+    expectFailureCode(forged, 'semantic-invariant-failed');
+  });
+
+  it('rejects forged construction that obstructs the active workforce route', () => {
+    const assigned = dispatchSimulationCommand(createInitialState(), {
+      atTick: 0,
+      command: {
+        employeeId: 'employee-dale',
+        jobId: 'inspect-garage-plot',
+        type: 'job.assign',
+      },
+      id: 'route-before-forged-construction',
+      sequence: 0,
+    }).state;
+    const dale = assigned.employees.find(({ id }) => id === 'employee-dale');
+    if (dale?.activity.status !== 'traveling') {
+      throw new Error('Dale does not have an active test route.');
+    }
+    const routeCell = dale.activity.path[dale.activity.nextPathIndex];
+    if (routeCell === undefined) throw new Error('Dale test route is empty.');
+    const built = dispatchSimulationCommand(assigned, {
+      atTick: 0,
+      command: {
+        blueprintId: 'wall',
+        placement: { kind: 'flexible', origin: { x: 0, z: 4 }, rotation: 0 },
+        type: 'construction.place',
+      },
+      id: 'valid-wall-away-from-route',
+      sequence: 1,
+    }).state;
+    const forged = mutateSave(encodeGameSave(snapshotFor(built)), (document) => {
+      const station = asRecord(document.station, 'station');
+      const event = (station.eventLedger as Record<string, unknown>[]).find(
+        ({ type }) => type === 'construction.placed',
+      );
+      if (event === undefined) throw new Error('Construction event is missing.');
+      event.cells = [{ ...routeCell }];
+      asRecord(event.occupant, 'event occupant').origin = { ...routeCell };
+      const occupancy = asRecord(station.stationOccupancy, 'station occupancy');
+      const occupant = (occupancy.occupants as Record<string, unknown>[]).find(
+        ({ id }) => id === 'built-wall-0',
+      );
+      if (occupant === undefined) throw new Error('Constructed occupant is missing.');
+      occupant.origin = { ...routeCell };
+    });
+
+    expectFailureCode(forged, 'semantic-invariant-failed');
   });
 
   it('round-trips a terminal slice without retaining transient clock work', () => {
@@ -500,7 +667,7 @@ describe('versioned game save codec', () => {
       mutateSave(
         valid,
         (document) => {
-          document.schemaVersion = 4;
+          document.schemaVersion = 5;
         },
         false,
       ),

@@ -126,6 +126,11 @@ export const presentDomainEvent = (event: DomainEvent): DomainEventPresentation 
         message: `${String(event.quantity)} ${event.product} stocked for $${String(event.totalCost)}.`,
         tone: 'neutral',
       };
+    case 'construction.placed':
+      return {
+        message: `${event.blueprintId.replaceAll('-', ' ')} placed for $${String(event.costChanges[0]?.cost ?? 0)} and ${String(event.costChanges[1]?.cost ?? 0)} scrap.`,
+        tone: 'positive',
+      };
   }
 };
 
@@ -133,6 +138,51 @@ export const presentCommandReceipt = (
   receipt: CommandReceipt,
 ): DomainEventPresentation => {
   switch (receipt.reason) {
+    case 'construction-placed':
+      return { message: 'Construction completed.', tone: 'positive' };
+    case 'construction-closed':
+      return {
+        message: 'Construction is available during day operations.',
+        tone: 'warning',
+      };
+    case 'insufficient-cash':
+      return { message: 'Construction rejected: insufficient cash.', tone: 'warning' };
+    case 'insufficient-scrap':
+      return {
+        message: 'Construction rejected: insufficient scrap.',
+        tone: 'warning',
+      };
+    case 'employee-cell-occupied':
+    case 'active-route-obstructed':
+      return {
+        message: 'Construction rejected: the footprint blocks active crew movement.',
+        tone: 'warning',
+      };
+    case 'blueprint-not-found':
+      return {
+        message: 'Construction rejected: blueprint was not found.',
+        tone: 'warning',
+      };
+    case 'construction-sequence-exhausted':
+      return {
+        message: 'Construction rejected: placement sequence is exhausted.',
+        tone: 'warning',
+      };
+    case 'placement-kind-mismatch':
+    case 'rotation-not-allowed':
+    case 'authored-plot-not-found':
+    case 'authored-plot-occupied':
+    case 'authored-plot-reserved':
+    case 'cell-not-buildable':
+    case 'cell-occupied':
+    case 'facility-not-allowed':
+    case 'invalid-candidate':
+    case 'occupant-id-already-used':
+    case 'out-of-bounds':
+      return {
+        message: 'Construction rejected: placement is invalid.',
+        tone: 'warning',
+      };
     case 'employee-busy':
       return { message: 'Assignment rejected: employee is busy.', tone: 'warning' };
     case 'employee-idle':

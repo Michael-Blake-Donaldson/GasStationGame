@@ -24,6 +24,34 @@ const quarterTurnSchema = z.union([
   z.literal(3),
 ]);
 
+const constructionCostSchema = z
+  .object({
+    cash: z.number().int().nonnegative(),
+    scrap: z.number().int().nonnegative(),
+  })
+  .refine(({ cash, scrap }) => cash + scrap > 0, {
+    message: 'Construction cost must consume cash or scrap.',
+  });
+
+const constructionDefinitionSchema = z.discriminatedUnion('placement', [
+  z.object({
+    cost: constructionCostSchema,
+    displayName: z.string().min(1),
+    facilityId: technicalIdSchema,
+    id: technicalIdSchema,
+    placement: z.literal('authored-plot'),
+  }),
+  z.object({
+    allowedRotations: z.array(quarterTurnSchema).min(1),
+    cost: constructionCostSchema,
+    displayName: z.string().min(1),
+    footprint: gridFootprintSchema,
+    id: technicalIdSchema,
+    placement: z.literal('flexible'),
+    structureId: technicalIdSchema,
+  }),
+]);
+
 export const facilityPlotSchema = gridRectangleSchema.extend({
   id: technicalIdSchema,
   rotation: quarterTurnSchema,
@@ -138,6 +166,7 @@ export const businessDefinitionSchema = z.object({
 export const regionSchema = z.object({
   id: technicalIdSchema,
   business: businessDefinitionSchema,
+  construction: z.array(constructionDefinitionSchema).min(1),
   displayName: z.string().min(1),
   identity: z.array(z.string().min(1)).min(1),
   pressures: z.array(z.string().min(1)).min(1),

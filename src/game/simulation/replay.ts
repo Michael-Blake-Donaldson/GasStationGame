@@ -15,12 +15,12 @@ import {
 import type { SimulationContext } from './scenario';
 import type { DomainEvent, SimulationState } from './types';
 
-export interface ScenarioReplayV5 {
+export interface ScenarioReplayV6 {
   readonly commands: readonly CommandEnvelope[];
   readonly gridDefinitionId: string;
   readonly gridDefinitionVersion: number;
   readonly replayKind: 'scenario';
-  readonly replayVersion: 5;
+  readonly replayVersion: 6;
   readonly rng: {
     readonly algorithm: typeof SEEDED_RANDOM_ALGORITHM;
     readonly seed: number;
@@ -135,10 +135,10 @@ const validateCommonFields = (
 const validateScenarioReplay: (
   replay: unknown,
   context: SimulationContext,
-) => asserts replay is ScenarioReplayV5 = (replay, context) => {
+) => asserts replay is ScenarioReplayV6 = (replay, context) => {
   const scenarioDefinition = context.scenario;
   if (!isRecord(replay)) throw new RangeError('Scenario replay must be an object.');
-  if (replay.replayKind !== 'scenario' || replay.replayVersion !== 5) {
+  if (replay.replayKind !== 'scenario' || replay.replayVersion !== 6) {
     throw new RangeError('Unsupported scenario replay format.');
   }
   if (
@@ -187,7 +187,7 @@ const orderedCommands = (
   );
 
 export const runScenarioReplay = (
-  replay: ScenarioReplayV5,
+  replay: ScenarioReplayV6,
   context: SimulationContext,
 ): ScenarioReplayResult => {
   validateScenarioReplay(replay, context);
@@ -254,7 +254,7 @@ export const runClockReplay = (
       gridDefinitionId: scenarioDefinition.stationGridDefinition.id,
       gridDefinitionVersion: scenarioDefinition.stationGridDefinition.version,
       replayKind: 'scenario',
-      replayVersion: 5,
+      replayVersion: 6,
       rng: {
         algorithm: SEEDED_RANDOM_ALGORITHM,
         seed: replay.seed,

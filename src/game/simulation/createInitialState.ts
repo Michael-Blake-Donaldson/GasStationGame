@@ -66,6 +66,7 @@ export const createInitialState = (
       },
     ],
     isSliceComplete: false,
+    nextConstructionSequence: 0,
     nextEventSequence: 1,
     phase: 'day',
     rng: createSeededRandomState(seed),

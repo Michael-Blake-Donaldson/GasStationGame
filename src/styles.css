@@ -1068,6 +1068,225 @@ button:focus-visible,
   padding: 0.75rem;
 }
 
+.construction-layout {
+  display: grid;
+  grid-template-columns: minmax(230px, 0.8fr) minmax(300px, 1.2fr);
+  gap: 14px;
+}
+
+.construction-palette,
+.construction-placement,
+.constructed-list {
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid var(--rule);
+  background: var(--panel-raised);
+}
+
+.construction-blueprints {
+  display: grid;
+  gap: 6px;
+  max-height: 380px;
+  overflow: auto;
+}
+
+.construction-blueprints button {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid var(--rule);
+  color: var(--cream);
+  background: rgba(0, 0, 0, 0.14);
+  text-align: left;
+  cursor: pointer;
+}
+
+.construction-blueprints button:hover,
+.construction-blueprints button.is-selected {
+  border-color: var(--amber);
+  background: rgba(255, 197, 110, 0.08);
+}
+
+.construction-blueprints button strong {
+  font-size: 11px;
+}
+
+.construction-blueprints button span,
+.construction-blueprints button small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.construction-coordinate-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.construction-field {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.construction-field input,
+.construction-field select {
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 9px;
+  border: 1px solid var(--rule-strong);
+  color: var(--cream);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.construction-rotation {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.construction-rotation legend {
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.construction-rotation > div {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.construction-rotation button {
+  min-height: 34px;
+  border: 1px solid var(--rule);
+  color: var(--cream);
+  background: rgba(0, 0, 0, 0.14);
+  cursor: pointer;
+}
+
+.construction-rotation button[aria-pressed='true'] {
+  color: var(--ink);
+  background: var(--amber);
+}
+
+.construction-facts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 14px;
+  padding: 9px 10px;
+  border: 1px solid var(--rule);
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.construction-facts strong {
+  color: var(--amber);
+}
+
+.construction-cells {
+  max-height: 76px;
+  margin: 8px 0;
+  overflow: auto;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.construction-feedback {
+  min-height: 48px;
+  padding: 9px 10px;
+  border-left: 2px solid var(--amber);
+  color: var(--amber);
+  background: rgba(255, 197, 110, 0.06);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.construction-feedback p,
+.construction-feedback ul {
+  margin: 0;
+}
+
+.construction-feedback ul {
+  padding-left: 16px;
+}
+
+.construction-confirm {
+  width: 100%;
+  min-height: 40px;
+  margin-top: 10px;
+  border: 1px solid var(--amber);
+  color: var(--ink);
+  background: var(--amber);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.construction-confirm:disabled {
+  border-color: var(--rule);
+  color: #706b5f;
+  background: rgba(0, 0, 0, 0.08);
+  cursor: not-allowed;
+}
+
+.constructed-list {
+  margin-top: 14px;
+}
+
+.constructed-list > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.constructed-list ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.constructed-list li {
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  font-size: 10px;
+}
+
+.constructed-list li span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.scene-construction-status {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 5px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 248, 220, 0.72);
+  background: rgba(14, 18, 16, 0.72);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
 .service-detail-list p {
   margin: 0;
 }
@@ -1328,6 +1547,11 @@ button:focus-visible,
   }
 
   .retail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .construction-layout,
+  .constructed-list ul {
     grid-template-columns: 1fr;
   }
 

@@ -18,17 +18,17 @@ const advanceSimulationByClockUnits = (
 ) => advanceByClockUnitsWithContext(state, clockUnits, greatPlainsSimulationContext);
 
 describe('simulation checkpoint hash', () => {
-  it('serializes checkpoint version 7 with exact RNG, station, and workforce state', () => {
+  it('serializes checkpoint version 8 with exact RNG, station, and workforce state', () => {
     const initial = createInitialState();
     const advanced = drawSimulationRandomInteger(initial, 0, 10).state;
     const checkpoint = createSimulationCheckpoint(advanced);
     const restored: unknown = JSON.parse(JSON.stringify(checkpoint));
 
-    expect(SIMULATION_CHECKPOINT_VERSION).toBe(7);
+    expect(SIMULATION_CHECKPOINT_VERSION).toBe(8);
     expect(checkpoint.rng).toEqual(advanced.rng);
     expect(checkpoint).toMatchObject({
       scenarioId: 'great-plains',
-      scenarioVersion: 5,
+      scenarioVersion: 6,
       stationOccupancy: {
         gridDefinitionId: 'great-plains-station-grid',
         gridDefinitionVersion: 1,
@@ -59,13 +59,16 @@ describe('simulation checkpoint hash', () => {
 
   it('changes when authoritative station occupancy changes', () => {
     const initial = createInitialState();
-    const changed = {
-      ...initial,
-      stationOccupancy: {
-        ...initial.stationOccupancy,
-        occupants: initial.stationOccupancy.occupants.slice(1),
+    const changed = dispatchSimulationCommand(initial, {
+      atTick: 0,
+      command: {
+        blueprintId: 'wall',
+        placement: { kind: 'flexible', origin: { x: 0, z: 4 }, rotation: 0 },
+        type: 'construction.place',
       },
-    };
+      id: 'checkpoint-wall',
+      sequence: 0,
+    }).state;
 
     expect(hashSimulationState(changed)).not.toBe(hashSimulationState(initial));
   });
@@ -231,6 +234,45 @@ describe('simulation checkpoint hash', () => {
 
     expect(stateEvent.performance.skillLevel).toBe(4);
     expect(stateCustomer.stage.performance.fatigue).toBe(21);
+  });
+
+  it('detaches constructed occupant, cell, and cost event facts', () => {
+    const initial = createInitialState();
+    const state = dispatchSimulationCommand(initial, {
+      atTick: 0,
+      command: {
+        blueprintId: 'gate',
+        placement: { kind: 'flexible', origin: { x: 0, z: 4 }, rotation: 1 },
+        type: 'construction.place',
+      },
+      id: 'checkpoint-gate',
+      sequence: 0,
+    }).state;
+    const checkpoint = createSimulationCheckpoint(state);
+    const checkpointEvent = checkpoint.eventLedger.find(
+      (event) => event.type === 'construction.placed',
+    );
+    const stateEvent = state.eventLedger.find(
+      (event) => event.type === 'construction.placed',
+    );
+    if (
+      checkpointEvent?.type !== 'construction.placed' ||
+      checkpointEvent.occupant.placement !== 'flexible' ||
+      stateEvent?.type !== 'construction.placed' ||
+      stateEvent.occupant.placement !== 'flexible'
+    ) {
+      throw new Error('Expected flexible construction fixture.');
+    }
+
+    (checkpointEvent.cells as { x: number; z: number }[])[0] = { x: 9, z: 9 };
+    (checkpointEvent.costChanges as unknown as { cost: number }[])[0] = {
+      cost: 999,
+    };
+    (checkpointEvent.occupant.origin as { x: number }).x = 9;
+
+    expect(stateEvent.cells[0]).toEqual({ x: 0, z: 4 });
+    expect(stateEvent.costChanges[0]?.cost).toBe(8);
+    expect(stateEvent.occupant.origin).toEqual({ x: 0, z: 4 });
   });
 
   it('rejects malformed persisted RNG state before checkpointing', () => {

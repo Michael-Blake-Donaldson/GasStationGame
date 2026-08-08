@@ -4,7 +4,7 @@ import type { SimulationContext } from './scenario';
 import type { DomainEvent, Employee, SimulationState } from './types';
 import { assertSimulationState } from './validation';
 
-export const SIMULATION_CHECKPOINT_VERSION = 7;
+export const SIMULATION_CHECKPOINT_VERSION = 8;
 
 const cloneDomainEvent = (event: DomainEvent): DomainEvent => {
   switch (event.type) {
@@ -18,6 +18,13 @@ const cloneDomainEvent = (event: DomainEvent): DomainEvent => {
       return { ...event, position: { ...event.position } };
     case 'service.started':
       return { ...event, performance: { ...event.performance } };
+    case 'construction.placed':
+      return {
+        ...event,
+        cells: event.cells.map((cell) => ({ ...cell })),
+        costChanges: event.costChanges.map((change) => ({ ...change })),
+        occupant: clonePlacedOccupant(event.occupant),
+      };
     default:
       return { ...event };
   }
@@ -91,6 +98,7 @@ export const createSimulationCheckpoint = (
       .map((employee) => cloneEmployee(employee)),
     eventLedger: state.eventLedger.map((event) => cloneDomainEvent(event)),
     isSliceComplete: state.isSliceComplete,
+    nextConstructionSequence: state.nextConstructionSequence,
     nextEventSequence: state.nextEventSequence,
     phase: state.phase,
     rng: {
@@ -123,7 +131,7 @@ export const createSimulationCheckpoint = (
   };
 };
 
-export type SimulationCheckpointV7 = ReturnType<typeof createSimulationCheckpoint>;
+export type SimulationCheckpointV8 = ReturnType<typeof createSimulationCheckpoint>;
 
 export const hashSimulationState = (
   state: SimulationState,

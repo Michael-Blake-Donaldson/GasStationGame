@@ -15,7 +15,14 @@ import {
   wholeMinuteForClockUnit,
 } from './clock';
 import { createInitialState } from './createInitialState';
-import type { GridCoordinate } from './grid';
+import {
+  checkAuthoredPlotOccupancy,
+  checkFlexibleOccupancy,
+  createStationOccupancyState,
+  type GridCoordinate,
+  type PlacedOccupant,
+  type StationOccupancyState,
+} from './grid';
 import { findJobRoute, MOVEMENT_CLOCK_UNITS_PER_CELL } from './jobs';
 import type { JobDefinition, SimulationContext } from './scenario';
 import type {
@@ -26,6 +33,7 @@ import type {
   SimulationState,
   TimeMode,
 } from './types';
+import { stringifyCanonicalJson } from '../serialization/canonicalJson';
 
 interface TrackedAssignment {
   readonly assignedAtClockUnit: number;
@@ -222,6 +230,42 @@ const assertResourceHistory = (
         cash: expectedCashAfter,
         [event.product]: expectedStockAfter,
       };
+      continue;
+    }
+    if (event.type === 'construction.placed') {
+      const blueprint = context.scenario.construction.find(
+        ({ id }) => id === event.blueprintId,
+      );
+      if (blueprint === undefined) {
+        throw new RangeError('Construction cost references an unknown blueprint.');
+      }
+      const expected = [
+        {
+          after: resources.cash - blueprint.cost.cash,
+          before: resources.cash,
+          cost: blueprint.cost.cash,
+          resource: 'cash' as const,
+        },
+        {
+          after: resources.scrap - blueprint.cost.scrap,
+          before: resources.scrap,
+          cost: blueprint.cost.scrap,
+          resource: 'scrap' as const,
+        },
+      ] as const;
+      if (
+        expected.some(({ after }) => after < 0 || !Number.isSafeInteger(after)) ||
+        JSON.stringify(event.costChanges) !== JSON.stringify(expected)
+      ) {
+        throw new RangeError(
+          'Construction event does not reconcile with resource history.',
+        );
+      }
+      resources = {
+        ...resources,
+        cash: expected[0].after,
+        scrap: expected[1].after,
+      };
     }
   }
   if (nextExpectedFlowIndex !== expectedFlows.length) {
@@ -231,6 +275,78 @@ const assertResourceHistory = (
     if (state.resources[key] !== resources[key]) {
       throw new RangeError('Final resources do not reconcile with the event ledger.');
     }
+  }
+};
+
+const appendOccupant = (
+  occupancy: StationOccupancyState,
+  occupant: PlacedOccupant,
+): StationOccupancyState => ({
+  ...occupancy,
+  occupants: [...occupancy.occupants, occupant].sort((left, right) =>
+    left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
+  ),
+});
+
+const assertConstructionHistory = (
+  context: SimulationContext,
+  state: SimulationState,
+): void => {
+  const grid = context.scenario.stationGridDefinition;
+  let occupancy = createStationOccupancyState(grid);
+  let nextConstructionSequence = 0;
+
+  for (const event of state.eventLedger) {
+    if (event.type !== 'construction.placed') continue;
+    const blueprint = context.scenario.construction.find(
+      ({ id }) => id === event.blueprintId,
+    );
+    const expectedOccupantId = `built-${event.blueprintId}-${String(nextConstructionSequence)}`;
+    if (
+      blueprint === undefined ||
+      event.constructionSequence !== nextConstructionSequence ||
+      event.occupant.id !== expectedOccupantId ||
+      phaseForClockUnit(event.absoluteClockUnit) !== 'day'
+    ) {
+      throw new RangeError('Construction event identity is not causally available.');
+    }
+
+    const check =
+      blueprint.placement === 'authored-plot' &&
+      event.occupant.placement === 'authored-plot' &&
+      event.occupant.facilityId === blueprint.facilityId
+        ? checkAuthoredPlotOccupancy(grid, occupancy, event.occupant)
+        : blueprint.placement === 'flexible' &&
+            event.occupant.placement === 'flexible' &&
+            event.occupant.structureId === blueprint.structureId &&
+            event.occupant.footprint.width === blueprint.footprint.width &&
+            event.occupant.footprint.height === blueprint.footprint.height &&
+            blueprint.allowedRotations.includes(event.occupant.rotation)
+          ? checkFlexibleOccupancy(grid, occupancy, event.occupant)
+          : undefined;
+    if (
+      check === undefined ||
+      !check.ok ||
+      JSON.stringify(event.cells) !== JSON.stringify(check.cells)
+    ) {
+      throw new RangeError('Construction event placement facts are invalid.');
+    }
+    occupancy = appendOccupant(occupancy, event.occupant);
+    nextConstructionSequence += 1;
+  }
+
+  if (
+    state.nextConstructionSequence !== nextConstructionSequence ||
+    stringifyCanonicalJson({
+      ...state.stationOccupancy,
+      occupants: [...state.stationOccupancy.occupants].sort((left, right) =>
+        left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
+      ),
+    }) !== stringifyCanonicalJson(occupancy)
+  ) {
+    throw new RangeError(
+      'Final construction state does not reconcile with its ledger.',
+    );
   }
 };
 
@@ -638,10 +754,50 @@ const assertJobHistory = (context: SimulationContext, state: SimulationState): v
   const assignments = new Map<string, TrackedAssignment>();
   const activeByEmployee = new Map<string, TrackedAssignment>();
   const activeByJob = new Map<string, TrackedAssignment>();
+  let occupancy = createStationOccupancyState(context.scenario.stationGridDefinition);
   let previousEvent: DomainEvent | undefined;
 
   for (const event of state.eventLedger) {
-    if (event.type === 'job.assigned') {
+    if (event.type === 'construction.placed') {
+      const constructionCells = new Set(
+        event.cells.map(({ x, z }) => `${String(x)},${String(z)}`),
+      );
+      for (const employee of state.employees) {
+        const assignment = activeByEmployee.get(employee.id);
+        const elapsed =
+          assignment === undefined
+            ? 0
+            : event.absoluteClockUnit - assignment.assignedAtClockUnit;
+        const reachedCellCount =
+          assignment?.status === 'traveling'
+            ? Math.floor(elapsed / MOVEMENT_CLOCK_UNITS_PER_CELL)
+            : 0;
+        const currentPosition =
+          assignment?.status === 'traveling'
+            ? reachedCellCount === 0
+              ? assignment.startPosition
+              : assignment.path[reachedCellCount - 1]
+            : assignment?.status === 'working'
+              ? assignment.destination
+              : positions.get(employee.id);
+        const remainingRoute =
+          assignment?.status === 'traveling'
+            ? assignment.path.slice(reachedCellCount)
+            : [];
+        if (
+          currentPosition === undefined ||
+          constructionCells.has(
+            `${String(currentPosition.x)},${String(currentPosition.z)}`,
+          ) ||
+          remainingRoute.some(({ x, z }) =>
+            constructionCells.has(`${String(x)},${String(z)}`),
+          )
+        ) {
+          throw new RangeError('Construction event obstructs active workforce state.');
+        }
+      }
+      occupancy = appendOccupant(occupancy, event.occupant);
+    } else if (event.type === 'job.assigned') {
       const job = context.scenario.jobs.find(({ id }) => id === event.jobId);
       const startPosition = positions.get(event.employeeId);
       if (
@@ -654,12 +810,7 @@ const assertJobHistory = (context: SimulationContext, state: SimulationState): v
       ) {
         throw new RangeError('Job assignment event is not causally available.');
       }
-      const route = findJobRoute(
-        context.scenario,
-        state.stationOccupancy,
-        startPosition,
-        job,
-      );
+      const route = findJobRoute(context.scenario, occupancy, startPosition, job);
       if (
         !route.ok ||
         route.path.length !== event.pathLength ||
@@ -801,6 +952,7 @@ export const assertEventLedgerSemantics = (
 ): void => {
   assertClockEvents(state);
   assertResourceHistory(context, state);
+  assertConstructionHistory(context, state);
   assertBusinessHistory(context, state);
   assertTimeModeHistory(state);
   assertJobHistory(context, state);

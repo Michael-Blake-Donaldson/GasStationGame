@@ -48,7 +48,7 @@ Record correctness, hesitation, and any panel opened.
 
 ### 2. Day-one operation
 
-Ask the player to reopen services and prepare for the forecast. Observe selection, assignment, skill/fatigue comparisons, exact speed/error explanations, queues, stocking, prices, construction, placement errors, camera control, and pause use. Ask which worker they expect to perform better and why, then compare that answer with the displayed arithmetic. Clear one active service assignment and confirm the player understands why the customer requeued. Do not suggest an optimal layout.
+Ask the player to reopen services and prepare for the forecast. Observe selection, assignment, skill/fatigue comparisons, exact speed/error explanations, queues, stocking, prices, construction, placement errors, camera control, and pause use. Ask which worker they expect to perform better and why, then compare that answer with the displayed arithmetic. Clear one active service assignment and confirm the player understands why the customer requeued. Ask the player to place a rotated gate and the garage, explain the exact cash/scrap cost and affected cells before confirming, then deliberately try an occupied, reserved, or active-route placement and describe why it is blocked. Make clear that GS-022 structures are visual/structural shells whose operational effects are not yet implemented. Do not suggest an optimal layout.
 
 ### 3. Dusk explanation
 
@@ -129,7 +129,7 @@ Before a playtest build is accepted, inspect the HUD, station guide, station-ope
 | 660 px       | One-column world/crew/intel flow; resource values wrap into two columns; event console stays reachable.        |
 | 320 px       | No page-level horizontal overflow or visible text below 10 px; guide and event log remain keyboard accessible. |
 
-At each width, verify selected time mode without relying on color, visible focus, forward and reverse focus containment, Escape/backdrop dismissal, focus return, background inertness, intentional overlay scrolling, and no clipped essential resource. Record screenshots only after repository-owned typography makes cross-machine comparisons deterministic.
+At each width, verify selected time mode without relying on color, visible focus, forward and reverse focus containment, Escape/backdrop dismissal, focus return, background inertness, intentional overlay scrolling, and no clipped essential resource. Include the construction dialog: verify blueprint selection, authored-plot versus coordinate controls, rotation, exact cost/cell explanation, disabled confirmation with text reasons, and internal vertical scrolling without horizontal overflow. Record screenshots only after repository-owned typography makes cross-machine comparisons deterministic.
 
 Before any build with durable saves reaches playtest, exercise the recovery matrix: clean newest slot, truncated newest slot, invalid-checksum newest slot, one unreadable slot, interrupted atomic replacement, failed read-back verification, and concurrent autosave requests. Confirm the newest valid sequence resumes exactly, fallback is disclosed, no failure mutates another recovery slot, and a loaded runtime neither replays old phase autosaves nor carries wall-clock runner debt.
 

@@ -11,6 +11,7 @@ import {
 } from '../persistence/recoveryRotation';
 import { tauriRecoveryStorage } from '../persistence/tauriRecoveryStorage';
 import type { CommandReceipt, SimulationCommand } from '../simulation/commands';
+import type { ConstructionPlacementRequest } from '../simulation/construction';
 import {
   createInitialState,
   dispatchSimulationCommand,
@@ -50,6 +51,7 @@ interface SimulationRuntime {
   readonly isRecoveryReady: boolean;
   readonly lastCommandReceipt: CommandReceipt | null;
   readonly orderInventory: (product: 'food' | 'fuel', quantity: number) => void;
+  readonly placeConstruction: (request: ConstructionPlacementRequest) => void;
   readonly setRetailPrice: (product: 'food' | 'fuel', unitPrice: number) => void;
   readonly simulation: SimulationState;
 }
@@ -222,6 +224,12 @@ export const useSimulationRuntime = ({
     },
     [issueCommand],
   );
+  const placeConstruction = useCallback(
+    (request: ConstructionPlacementRequest) => {
+      issueCommand({ ...request, type: 'construction.place' });
+    },
+    [issueCommand],
+  );
 
   return {
     assignJob,
@@ -230,6 +238,7 @@ export const useSimulationRuntime = ({
     isRecoveryReady,
     lastCommandReceipt: runtime.lastCommandReceipt,
     orderInventory,
+    placeConstruction,
     setRetailPrice,
     simulation: runtime.simulation,
   };

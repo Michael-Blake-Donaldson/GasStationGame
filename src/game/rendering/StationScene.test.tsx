@@ -5,6 +5,11 @@ import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StationVisualState } from '../presentation/stationVisualState';
 import { StationScene } from './StationScene';
+import {
+  createInitialState,
+  dispatchSimulationCommand,
+  greatPlainsSimulationContext,
+} from '../scenarios/greatPlains';
 
 interface RendererRecord {
   readonly dispose: () => void;
@@ -78,9 +83,17 @@ describe('StationScene lifecycle', () => {
     const geometryDispose = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
     const materialDispose = vi.spyOn(THREE.Material.prototype, 'dispose');
     const root = createRoot(container);
+    const occupancy = createInitialState().stationOccupancy;
+    const stationGrid = greatPlainsSimulationContext.scenario.stationGridDefinition;
 
     act(() => {
-      root.render(<StationScene visualState={visualState('day', 'stable')} />);
+      root.render(
+        <StationScene
+          occupancy={occupancy}
+          stationGrid={stationGrid}
+          visualState={visualState('day', 'stable')}
+        />,
+      );
     });
 
     expect(rendererRecords).toHaveLength(1);
@@ -96,7 +109,13 @@ describe('StationScene lifecycle', () => {
     const initialRenderCount = vi.mocked(renderer.render).mock.calls.length;
 
     act(() => {
-      root.render(<StationScene visualState={visualState('night', 'critical')} />);
+      root.render(
+        <StationScene
+          occupancy={occupancy}
+          stationGrid={stationGrid}
+          visualState={visualState('night', 'critical')}
+        />,
+      );
     });
 
     expect(rendererRecords).toHaveLength(1);
@@ -115,5 +134,77 @@ describe('StationScene lifecycle', () => {
     expect(materialDispose).toHaveBeenCalled();
     expect(renderer.dispose).toHaveBeenCalledTimes(1);
     expect(container.querySelector('canvas')).toBeNull();
+  });
+
+  it('projects authoritative built occupants without recreating the renderer', () => {
+    const geometryDispose = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    const materialDispose = vi.spyOn(THREE.Material.prototype, 'dispose');
+    const root = createRoot(container);
+    const initial = createInitialState();
+    const stationGrid = greatPlainsSimulationContext.scenario.stationGridDefinition;
+    act(() => {
+      root.render(
+        <StationScene
+          occupancy={initial.stationOccupancy}
+          stationGrid={stationGrid}
+          visualState={visualState('day', 'stable')}
+        />,
+      );
+    });
+    expect(container.textContent).toContain('0 new construction shells');
+    const built = dispatchSimulationCommand(initial, {
+      atTick: 0,
+      command: {
+        blueprintId: 'wall',
+        placement: { kind: 'flexible', origin: { x: 0, z: 4 }, rotation: 0 },
+        type: 'construction.place',
+      },
+      id: 'scene-wall',
+      sequence: 0,
+    }).state;
+    const renderer = rendererRecords[0];
+    if (renderer === undefined) throw new Error('Renderer was not created.');
+    const renderCount = vi.mocked(renderer.render).mock.calls.length;
+    act(() => {
+      root.render(
+        <StationScene
+          occupancy={built.stationOccupancy}
+          stationGrid={stationGrid}
+          visualState={visualState('day', 'stable')}
+        />,
+      );
+    });
+    expect(rendererRecords).toHaveLength(1);
+    expect(container.textContent).toContain('1 new construction shells');
+    expect(vi.mocked(renderer.render).mock.calls.length).toBeGreaterThan(renderCount);
+    const geometryDisposalsBeforeReplacement = geometryDispose.mock.calls.length;
+    const materialDisposalsBeforeReplacement = materialDispose.mock.calls.length;
+    const extended = dispatchSimulationCommand(built, {
+      atTick: 0,
+      command: {
+        blueprintId: 'wall',
+        placement: { kind: 'flexible', origin: { x: 1, z: 4 }, rotation: 0 },
+        type: 'construction.place',
+      },
+      id: 'scene-second-wall',
+      sequence: 1,
+    }).state;
+    act(() => {
+      root.render(
+        <StationScene
+          occupancy={extended.stationOccupancy}
+          stationGrid={stationGrid}
+          visualState={visualState('day', 'stable')}
+        />,
+      );
+    });
+    expect(container.textContent).toContain('2 new construction shells');
+    expect(geometryDispose.mock.calls.length).toBe(
+      geometryDisposalsBeforeReplacement + 1,
+    );
+    expect(materialDispose.mock.calls.length).toBe(
+      materialDisposalsBeforeReplacement + 1,
+    );
+    act(() => root.unmount());
   });
 });

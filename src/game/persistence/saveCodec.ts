@@ -25,11 +25,13 @@ import {
   saveDocumentV1Schema,
   saveDocumentV2Schema,
   saveDocumentV3Schema,
-  savePayloadV3Schema,
+  saveDocumentV4Schema,
+  savePayloadV4Schema,
   type SaveDocumentV1,
   type SaveDocumentV2,
   type SaveDocumentV3,
-  type SavePayloadV3,
+  type SaveDocumentV4,
+  type SavePayloadV4,
 } from './saveSchema';
 
 export interface GameSaveContext {
@@ -93,7 +95,7 @@ const assertNonNegativeSafeInteger = (value: number, name: string): void => {
 const createPayload = (
   snapshot: GameSaveSnapshot,
   context: GameSaveContext,
-): SavePayloadV3 => {
+): SavePayloadV4 => {
   assertNonNegativeSafeInteger(snapshot.nextCommandSequence, 'nextCommandSequence');
   assertNonNegativeSafeInteger(snapshot.saveSequence, 'saveSequence');
   const campaign = canonicalizeCampaignState(
@@ -126,7 +128,7 @@ const createPayload = (
     settings: { schemaVersion: SAVE_SETTINGS_VERSION },
     station,
   };
-  return savePayloadV3Schema.parse(payload);
+  return savePayloadV4Schema.parse(payload);
 };
 
 export const encodeGameSave = (
@@ -134,24 +136,27 @@ export const encodeGameSave = (
   context: GameSaveContext,
 ): string => {
   const payload = createPayload(snapshot, context);
-  const document: SaveDocumentV3 = {
+  const document: SaveDocumentV4 = {
     ...payload,
     checksum: {
       algorithm: SAVE_CHECKSUM_ALGORITHM,
       value: hashCanonicalJson(payload),
     },
   };
-  return stringifyCanonicalJson(saveDocumentV3Schema.parse(document));
+  return stringifyCanonicalJson(saveDocumentV4Schema.parse(document));
 };
 
 const restoreSimulationState = (
   station:
-    SaveDocumentV1['station'] | SaveDocumentV2['station'] | SaveDocumentV3['station'],
+    | SaveDocumentV1['station']
+    | SaveDocumentV2['station']
+    | SaveDocumentV3['station']
+    | SaveDocumentV4['station'],
   context: GameSaveContext,
 ): SimulationState => {
   const isLegacyV1 = !('business' in station);
-  const isLegacyPerformance = station.version < 7;
-  const eventLedger: readonly DomainEvent[] = isLegacyPerformance
+  const isLegacyConstruction = station.version < 8;
+  const eventLedger: readonly DomainEvent[] = isLegacyConstruction
     ? station.eventLedger
         .filter(
           (event) =>
@@ -225,6 +230,8 @@ const restoreSimulationState = (
     }),
     eventLedger,
     isSliceComplete: station.isSliceComplete,
+    nextConstructionSequence:
+      'nextConstructionSequence' in station ? station.nextConstructionSequence : 0,
     nextEventSequence: isLegacyV1 ? eventLedger.length : station.nextEventSequence,
     phase: station.phase,
     resources: isLegacyV1
@@ -237,7 +244,7 @@ const restoreSimulationState = (
       : station.resources,
     rng: station.rng,
     scenarioId: station.scenarioId,
-    scenarioVersion: isLegacyPerformance
+    scenarioVersion: isLegacyConstruction
       ? context.simulation.scenario.version
       : station.scenarioVersion,
     seed: station.seed,
@@ -262,6 +269,7 @@ const headerFailure = (value: unknown): SaveLoadResult | undefined => {
   if (
     value.schemaVersion !== 1 &&
     value.schemaVersion !== 2 &&
+    value.schemaVersion !== 3 &&
     value.schemaVersion !== SAVE_SCHEMA_VERSION
   ) {
     return failure(
@@ -272,7 +280,13 @@ const headerFailure = (value: unknown): SaveLoadResult | undefined => {
   }
   const station = value.station;
   const expectedCheckpointVersion =
-    value.schemaVersion === 1 ? 5 : value.schemaVersion === 2 ? 6 : 7;
+    value.schemaVersion === 1
+      ? 5
+      : value.schemaVersion === 2
+        ? 6
+        : value.schemaVersion === 3
+          ? 7
+          : 8;
   if (isRecord(station) && station.version !== expectedCheckpointVersion) {
     return failure(
       'unsupported-checkpoint-version',
@@ -296,7 +310,7 @@ const headerFailure = (value: unknown): SaveLoadResult | undefined => {
 };
 
 const contentFailure = (
-  document: SaveDocumentV1 | SaveDocumentV2 | SaveDocumentV3,
+  document: SaveDocumentV1 | SaveDocumentV2 | SaveDocumentV3 | SaveDocumentV4,
   context: GameSaveContext,
 ): SaveLoadResult | undefined => {
   const scenario = context.simulation.scenario;
@@ -305,7 +319,9 @@ const contentFailure = (
       ? 3
       : document.schemaVersion === 2
         ? 4
-        : scenario.version;
+        : document.schemaVersion === 3
+          ? 5
+          : scenario.version;
   if (
     document.content.scenarioId !== scenario.id ||
     document.content.gridDefinitionId !== scenario.stationGridDefinition.id ||
@@ -355,7 +371,9 @@ export const decodeGameSave = (
       ? saveDocumentV1Schema.safeParse(parsed)
       : isRecord(parsed) && parsed.schemaVersion === 2
         ? saveDocumentV2Schema.safeParse(parsed)
-        : saveDocumentV3Schema.safeParse(parsed);
+        : isRecord(parsed) && parsed.schemaVersion === 3
+          ? saveDocumentV3Schema.safeParse(parsed)
+          : saveDocumentV4Schema.safeParse(parsed);
   if (!structural.success) {
     return {
       issues: structural.error.issues.map((issue) => ({

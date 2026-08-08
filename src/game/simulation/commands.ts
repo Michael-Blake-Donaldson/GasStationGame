@@ -4,6 +4,12 @@ import { findJobRoute } from './jobs';
 import type { SimulationContext } from './scenario';
 import type { SimulationState, TimeMode } from './types';
 import { setBusinessPrice } from './business';
+import {
+  appendConstructedOccupant,
+  evaluateConstructionPlacement,
+  type ConstructionIssueReason,
+  type ConstructionPlacementRequest,
+} from './construction';
 
 export interface SetTimeModeCommand {
   readonly mode: TimeMode;
@@ -33,10 +39,15 @@ export interface OrderInventoryCommand {
   readonly type: 'inventory.order';
 }
 
+export type PlaceConstructionCommand = ConstructionPlacementRequest & {
+  readonly type: 'construction.place';
+};
+
 export type SimulationCommand =
   | AssignJobCommand
   | CancelJobCommand
   | OrderInventoryCommand
+  | PlaceConstructionCommand
   | SetRetailPriceCommand
   | SetTimeModeCommand;
 
@@ -48,8 +59,10 @@ export interface CommandEnvelope {
 }
 
 export type CommandReceiptReason =
+  | ConstructionIssueReason
   | 'command-scheduled-in-future'
   | 'command-scheduled-in-past'
+  | 'construction-placed'
   | 'invalid-command-envelope'
   | 'invalid-command-payload'
   | 'employee-busy'
@@ -124,6 +137,32 @@ const isTechnicalId = (value: unknown): value is string =>
 const isRetailProduct = (value: unknown): value is 'food' | 'fuel' =>
   value === 'food' || value === 'fuel';
 
+const isQuarterTurn = (value: unknown): value is 0 | 1 | 2 | 3 =>
+  value === 0 || value === 1 || value === 2 || value === 3;
+
+const parseConstructionPlacement = (
+  value: unknown,
+): ConstructionPlacementRequest['placement'] | undefined => {
+  if (!isRecord(value) || typeof value.kind !== 'string') return undefined;
+  if (value.kind === 'authored-plot') {
+    return isTechnicalId(value.plotId)
+      ? { kind: 'authored-plot', plotId: value.plotId }
+      : undefined;
+  }
+  if (value.kind !== 'flexible' || !isRecord(value.origin)) return undefined;
+  return typeof value.origin.x === 'number' &&
+    Number.isSafeInteger(value.origin.x) &&
+    typeof value.origin.z === 'number' &&
+    Number.isSafeInteger(value.origin.z) &&
+    isQuarterTurn(value.rotation)
+    ? {
+        kind: 'flexible',
+        origin: { x: value.origin.x, z: value.origin.z },
+        rotation: value.rotation,
+      }
+    : undefined;
+};
+
 export const parseSimulationCommand = (
   value: unknown,
 ): SimulationCommand | undefined => {
@@ -165,9 +204,84 @@ export const parseSimulationCommand = (
             type: 'inventory.order',
           }
         : undefined;
+    case 'construction.place': {
+      const placement = parseConstructionPlacement(value.placement);
+      if (!isTechnicalId(value.blueprintId) || placement === undefined) {
+        return undefined;
+      }
+      return placement.kind === 'authored-plot'
+        ? {
+            blueprintId: value.blueprintId,
+            placement: { ...placement },
+            type: 'construction.place',
+          }
+        : {
+            blueprintId: value.blueprintId,
+            placement: { ...placement, origin: { ...placement.origin } },
+            type: 'construction.place',
+          };
+    }
     default:
       return undefined;
   }
+};
+
+const dispatchPlaceConstruction = (
+  state: SimulationState,
+  envelope: RuntimeCommandEnvelope,
+  command: PlaceConstructionCommand,
+  context: SimulationContext,
+): DispatchCommandResult => {
+  const evaluation = evaluateConstructionPlacement(state, context, command);
+  if (!evaluation.ok) {
+    return {
+      receipt: receiptFor(envelope, {
+        changed: false,
+        emittedEventSequences: [],
+        reason: evaluation.issues[0]?.reason ?? 'invalid-command-payload',
+        status: 'rejected',
+      }),
+      state,
+    };
+  }
+
+  const construction = appendConstructedOccupant(state, evaluation);
+  const cashAfter = construction.resources.cash;
+  const scrapAfter = construction.resources.scrap;
+  const next = appendDomainEvent(
+    { ...state, ...construction },
+    {
+      blueprintId: evaluation.blueprint.id,
+      cells: evaluation.cells.map((cell) => ({ ...cell })),
+      constructionSequence: state.nextConstructionSequence,
+      costChanges: [
+        {
+          after: cashAfter,
+          before: state.resources.cash,
+          cost: evaluation.cost.cash,
+          resource: 'cash',
+        },
+        {
+          after: scrapAfter,
+          before: state.resources.scrap,
+          cost: evaluation.cost.scrap,
+          resource: 'scrap',
+        },
+      ],
+      occupant: evaluation.occupant,
+      reason: 'player-request',
+      type: 'construction.placed',
+    },
+  );
+  return {
+    receipt: receiptFor(envelope, {
+      changed: true,
+      emittedEventSequences: [state.nextEventSequence],
+      reason: 'construction-placed',
+      status: 'accepted',
+    }),
+    state: next,
+  };
 };
 
 const receiptFor = (
@@ -642,6 +756,7 @@ export const dispatchSimulationCommand = (
   if (command === undefined) {
     const knownType = [
       'inventory.order',
+      'construction.place',
       'job.assign',
       'job.cancel',
       'retail.price.set',
@@ -668,6 +783,8 @@ export const dispatchSimulationCommand = (
       return dispatchSetRetailPrice(state, envelope, command, context);
     case 'inventory.order':
       return dispatchOrderInventory(state, envelope, command, context);
+    case 'construction.place':
+      return dispatchPlaceConstruction(state, envelope, command, context);
     default:
       return command satisfies never;
   }

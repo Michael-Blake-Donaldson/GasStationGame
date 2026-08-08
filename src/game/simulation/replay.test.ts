@@ -7,7 +7,7 @@ import {
   runClockReplay,
   runScenarioReplay,
   type ClockReplayV1,
-  type ScenarioReplayV5,
+  type ScenarioReplayV6,
 } from '../scenarios/greatPlains';
 import { SEEDED_RANDOM_ALGORITHM, SEEDED_RANDOM_VERSION } from './random';
 
@@ -32,12 +32,12 @@ const replayFixture = (): ClockReplayV1 => ({
   targetNightCount: 3,
 });
 
-const scenarioReplayFixture = (): ScenarioReplayV5 => ({
+const scenarioReplayFixture = (): ScenarioReplayV6 => ({
   commands: replayFixture().commands,
   gridDefinitionId: 'great-plains-station-grid',
   gridDefinitionVersion: 1,
   replayKind: 'scenario',
-  replayVersion: 5,
+  replayVersion: 6,
   rng: {
     algorithm: SEEDED_RANDOM_ALGORITHM,
     seed: 1987,
@@ -104,8 +104,56 @@ describe('clock commands and replay', () => {
     expect(first.stopReason).toBe('tick-limit-reached');
   });
 
+  it('replays construction to identical occupancy, cost, event, and hash facts', () => {
+    const replay: ScenarioReplayV6 = {
+      ...scenarioReplayFixture(),
+      commands: [
+        {
+          atTick: 0,
+          command: {
+            blueprintId: 'gate',
+            placement: {
+              kind: 'flexible',
+              origin: { x: 0, z: 4 },
+              rotation: 1,
+            },
+            type: 'construction.place',
+          },
+          id: 'replay-gate',
+          sequence: 0,
+        },
+        {
+          atTick: 0,
+          command: { mode: 'normal', type: 'time-mode.set' },
+          id: 'replay-construction-clock',
+          sequence: 1,
+        },
+      ],
+      stopAfterTick: 2,
+    };
+    const first = runScenarioReplay(replay);
+    const repeated = runScenarioReplay(replay);
+
+    expect(repeated).toEqual(first);
+    expect(first.state).toMatchObject({
+      nextConstructionSequence: 1,
+      resources: { cash: 412, scrap: 29 },
+    });
+    const event = first.state.eventLedger.find(
+      (candidate) => candidate.type === 'construction.placed',
+    );
+    expect(event?.type).toBe('construction.placed');
+    if (event?.type !== 'construction.placed') return;
+    expect(event).toMatchObject({
+      blueprintId: 'gate',
+      constructionSequence: 0,
+      type: 'construction.placed',
+    });
+    expect(event.occupant).toMatchObject({ id: 'built-gate-0', rotation: 1 });
+  });
+
   it('replays staffed service errors with identical RNG consumption and facts', () => {
-    const replay: ScenarioReplayV5 = {
+    const replay: ScenarioReplayV6 = {
       ...scenarioReplayFixture(),
       commands: [
         {
@@ -234,7 +282,7 @@ describe('clock commands and replay', () => {
       const invalid = {
         ...scenarioReplayFixture(),
         ...override,
-      } as unknown as ScenarioReplayV5;
+      } as unknown as ScenarioReplayV6;
       expect(() => runScenarioReplay(invalid)).toThrow(message);
     },
   );
