@@ -28,50 +28,16 @@ export const createInitialState = (
     scenarioDefinition.stationGridDefinition,
   );
 
-  const employeeDetails = [
-    {
-      id: 'employee-ada',
-      name: 'Ada',
-      role: 'Checkout',
-      fatigue: 14,
-      relationship: 12,
-    },
-    { id: 'employee-bo', name: 'Bo', role: 'Pumps', fatigue: 21, relationship: 8 },
-    {
-      id: 'employee-cora',
-      name: 'Cora',
-      role: 'Garage',
-      fatigue: 18,
-      relationship: 17,
-    },
-    {
-      id: 'employee-dale',
-      name: 'Dale',
-      role: 'Security',
-      fatigue: 26,
-      relationship: 4,
-    },
-  ] as const;
-  const employeeIds = new Set<string>(employeeDetails.map((employee) => employee.id));
-  if (
-    scenarioDefinition.initialEmployeePositions.length !== employeeDetails.length ||
-    scenarioDefinition.initialEmployeePositions.some(
-      ({ employeeId }) => !employeeIds.has(employeeId),
-    )
-  ) {
-    throw new RangeError('Scenario must position each initial employee exactly once.');
-  }
-  const employees = employeeDetails.map((employee) => {
-    const initialPosition = scenarioDefinition.initialEmployeePositions.find(
-      ({ employeeId }) => employeeId === employee.id,
-    );
-    if (initialPosition === undefined) {
-      throw new RangeError(`Scenario is missing a position for ${employee.id}.`);
-    }
+  const employees = scenarioDefinition.initialEmployeePositions.map((employee) => {
     return {
-      ...employee,
+      fatigue: employee.fatigue,
+      id: employee.employeeId,
+      name: employee.name,
+      relationship: employee.relationship,
+      role: employee.role,
+      skills: employee.skills.map((skill) => ({ ...skill })),
       activity: { status: 'idle' as const },
-      position: { ...initialPosition.position },
+      position: { ...employee.position },
     };
   });
 

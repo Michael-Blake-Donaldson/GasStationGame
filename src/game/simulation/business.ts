@@ -1,13 +1,21 @@
 import { CLOCK_UNITS_PER_MINUTE, MINUTES_PER_DAY } from './clock';
-import type { Resources } from './types';
+import {
+  calculateServicePerformance,
+  type ServicePerformanceSnapshot,
+} from './employeePerformance';
+import { drawRandomInteger, type SeededRandomState } from './random';
+import type { Employee, Resources } from './types';
 
 export interface RetailProductDefinition {
+  readonly baseErrorChancePermille: number;
   readonly baseDemandUnits: number;
   readonly defaultUnitPrice: number;
   readonly demandStepUnits: number;
   readonly demandVariationCount: number;
+  readonly errorReworkClockUnits: number;
   readonly maximumUnitPrice: number;
   readonly serviceClockUnits: number;
+  readonly serviceSkillId: string;
   readonly wholesaleUnitCost: number;
 }
 
@@ -18,6 +26,13 @@ export interface TrafficWindowDefinition {
 }
 
 export interface BusinessDefinition {
+  readonly performanceRules: {
+    readonly fatigueErrorPenaltyPermillePerTen: number;
+    readonly fatigueSpeedPenaltyPermillePerTen: number;
+    readonly maximumErrorChancePermille: number;
+    readonly skillErrorReductionPermillePerLevel: number;
+    readonly skillSpeedReductionPermillePerLevel: number;
+  };
   readonly products: {
     readonly food: RetailProductDefinition;
     readonly fuel: RetailProductDefinition;
@@ -34,12 +49,14 @@ export type CustomerStage =
   | { readonly type: 'checkout-queue' }
   | {
       readonly remainingClockUnits: number;
+      readonly performance: ServicePerformanceSnapshot;
       readonly type: 'checkout-service';
       readonly unitPrice: number;
     }
   | { readonly type: 'pump-queue' }
   | {
       readonly remainingClockUnits: number;
+      readonly performance: ServicePerformanceSnapshot;
       readonly type: 'pump-service';
       readonly unitPrice: number;
     };
@@ -59,11 +76,27 @@ export interface BusinessState {
   readonly completedCustomerCount: number;
   readonly nextCustomerSequence: number;
   readonly prices: BusinessPrices;
+  readonly performanceBaselineReason: 'legacy-save-migration' | 'scenario-start';
+  readonly performanceStartsAtClockUnit: number;
   readonly trafficBaselineReason: 'legacy-save-migration' | 'scenario-start';
   readonly trafficStartsAtClockUnit: number;
 }
 
 export type BusinessOutcome =
+  | {
+      readonly customerId: string;
+      readonly performance: ServicePerformanceSnapshot;
+      readonly product: 'food' | 'fuel';
+      readonly type: 'service-started';
+      readonly unitPrice: number;
+    }
+  | {
+      readonly customerId: string;
+      readonly employeeId: string;
+      readonly product: 'food' | 'fuel';
+      readonly remainingClockUnits: number;
+      readonly type: 'service-interrupted';
+    }
   | {
       readonly customerId: string;
       readonly foodUnitsRequested: number;
@@ -90,28 +123,34 @@ export type BusinessOutcome =
     };
 
 export interface BusinessStaffing {
-  readonly checkout: boolean;
-  readonly pumps: boolean;
+  readonly checkout: Pick<Employee, 'fatigue' | 'id' | 'skills'> | undefined;
+  readonly pumps: Pick<Employee, 'fatigue' | 'id' | 'skills'> | undefined;
 }
 
 export interface AdvanceBusinessResult {
   readonly business: BusinessState;
   readonly outcomes: readonly BusinessOutcome[];
   readonly resources: Resources;
+  readonly rng: SeededRandomState;
 }
 
 const assertProductDefinition = (
   product: RetailProductDefinition,
   name: string,
 ): void => {
+  if (!/^[a-z0-9-]+$/u.test(product.serviceSkillId)) {
+    throw new RangeError(`${name} service skill must be a technical ID.`);
+  }
   const integers = [
     product.baseDemandUnits,
     product.defaultUnitPrice,
     product.demandStepUnits,
     product.demandVariationCount,
+    product.errorReworkClockUnits,
     product.maximumUnitPrice,
     product.serviceClockUnits,
     product.wholesaleUnitCost,
+    product.baseErrorChancePermille,
   ];
   if (integers.some((value) => !Number.isSafeInteger(value) || value < 0)) {
     throw new RangeError(`${name} retail values must be non-negative safe integers.`);
@@ -155,6 +194,14 @@ export const assertBusinessDefinition = (definition: BusinessDefinition): void =
   if (definition.trafficWindows.length === 0) {
     throw new RangeError('At least one traffic window is required.');
   }
+  const rules = definition.performanceRules;
+  const ruleValues = Object.values(rules);
+  if (
+    ruleValues.some((value) => !Number.isSafeInteger(value) || value < 0) ||
+    rules.maximumErrorChancePermille > 1000
+  ) {
+    throw new RangeError('Business performance rules are outside supported bounds.');
+  }
 };
 
 export const createInitialBusinessState = (
@@ -172,6 +219,8 @@ export const createInitialBusinessState = (
     activeCustomers: [],
     completedCustomerCount: 0,
     nextCustomerSequence: 0,
+    performanceBaselineReason: trafficBaselineReason,
+    performanceStartsAtClockUnit: trafficStartsAtClockUnit,
     prices: {
       food: definition.products.food.defaultUnitPrice,
       fuel: definition.products.fuel.defaultUnitPrice,
@@ -279,6 +328,22 @@ export const assertBusinessState = (
   ) {
     throw new RangeError('Business traffic baseline reason is inconsistent.');
   }
+  if (
+    !Number.isSafeInteger(business.performanceStartsAtClockUnit) ||
+    business.performanceStartsAtClockUnit < 0 ||
+    business.performanceStartsAtClockUnit > absoluteClockUnit + 1
+  ) {
+    throw new RangeError('Business performance baseline is invalid.');
+  }
+  const scenarioStartClockUnitForPerformance = 8 * 60 * CLOCK_UNITS_PER_MINUTE;
+  if (
+    (business.performanceBaselineReason === 'scenario-start' &&
+      business.performanceStartsAtClockUnit !== scenarioStartClockUnitForPerformance) ||
+    (business.performanceBaselineReason === 'legacy-save-migration' &&
+      business.performanceStartsAtClockUnit <= scenarioStartClockUnitForPerformance)
+  ) {
+    throw new RangeError('Business performance baseline reason is inconsistent.');
+  }
 
   const customerIds = new Set<string>();
   const customerSequences = new Set<number>();
@@ -312,12 +377,31 @@ export const assertBusinessState = (
         !Number.isSafeInteger(customer.stage.remainingClockUnits) ||
         customer.stage.remainingClockUnits < 1 ||
         customer.stage.remainingClockUnits >
-          definition.products[product].serviceClockUnits ||
+          customer.stage.performance.totalClockUnits ||
         !Number.isSafeInteger(customer.stage.unitPrice) ||
         customer.stage.unitPrice < 1 ||
         customer.stage.unitPrice > definition.products[product].maximumUnitPrice
       ) {
         throw new RangeError('Active customer service state is invalid.');
+      }
+      const performance = customer.stage.performance;
+      const recalculated = calculateServicePerformance(
+        {
+          fatigue: performance.fatigue,
+          id: performance.employeeId,
+          skills: [{ id: performance.skillId, level: performance.skillLevel }],
+        },
+        definition.products[product],
+        definition.performanceRules,
+        performance.errorRoll,
+        performance.rngDrawCount,
+      );
+      if (
+        !Number.isSafeInteger(performance.rngDrawCount) ||
+        performance.rngDrawCount < 1 ||
+        JSON.stringify(performance) !== JSON.stringify(recalculated)
+      ) {
+        throw new RangeError('Active customer performance snapshot is invalid.');
       }
     }
   }
@@ -327,19 +411,49 @@ const startFirstQueuedCustomer = (
   customers: readonly RoutineCustomer[],
   queue: 'checkout-queue' | 'pump-queue',
   service: 'checkout-service' | 'pump-service',
-  duration: number,
+  definition: BusinessDefinition,
+  employee: Pick<Employee, 'fatigue' | 'id' | 'skills'>,
+  product: 'food' | 'fuel',
+  rng: SeededRandomState,
   unitPrice: number,
-): RoutineCustomer[] => {
+): {
+  readonly customers: RoutineCustomer[];
+  readonly outcome?: BusinessOutcome;
+  readonly rng: SeededRandomState;
+} => {
   const first = customers.find((customer) => customer.stage.type === queue);
-  if (first === undefined) return [...customers];
-  return customers.map((customer) =>
-    customer.id === first.id
-      ? {
-          ...customer,
-          stage: { remainingClockUnits: duration, type: service, unitPrice },
-        }
-      : customer,
+  if (first === undefined) return { customers: [...customers], rng };
+  const random = drawRandomInteger(rng, 0, 1000);
+  const performance = calculateServicePerformance(
+    employee,
+    definition.products[product],
+    definition.performanceRules,
+    random.value,
+    random.rng.drawCount,
   );
+  return {
+    customers: customers.map((customer) =>
+      customer.id === first.id
+        ? {
+            ...customer,
+            stage: {
+              performance,
+              remainingClockUnits: performance.totalClockUnits,
+              type: service,
+              unitPrice,
+            },
+          }
+        : customer,
+    ),
+    outcome: {
+      customerId: first.id,
+      performance,
+      product,
+      type: 'service-started',
+      unitPrice,
+    },
+    rng: random.rng,
+  };
 };
 
 const safeAdd = (left: number, right: number, name: string): number => {
@@ -356,7 +470,29 @@ export const advanceBusinessByClockUnit = (
   resources: Readonly<Resources>,
   absoluteClockUnit: number,
   staffing: BusinessStaffing,
+  rng: SeededRandomState,
 ): AdvanceBusinessResult => {
+  const pumpsEmployee = staffing.pumps;
+  const checkoutEmployee = staffing.checkout;
+  const hasScheduledArrival =
+    absoluteClockUnit >= business.trafficStartsAtClockUnit &&
+    isScheduledCustomerArrival(definition, absoluteClockUnit);
+  const hasActiveService = business.activeCustomers.some(
+    (customer) =>
+      customer.stage.type === 'pump-service' ||
+      customer.stage.type === 'checkout-service',
+  );
+
+  if (
+    !hasScheduledArrival &&
+    !hasActiveService &&
+    pumpsEmployee === undefined &&
+    checkoutEmployee === undefined
+  ) {
+    return { business, outcomes: [], resources, rng };
+  }
+
+  let nextRng = rng;
   let customers = business.activeCustomers.map((customer) => ({
     ...customer,
     stage: { ...customer.stage },
@@ -366,10 +502,7 @@ export const advanceBusinessByClockUnit = (
   let nextCustomerSequence = business.nextCustomerSequence;
   let completedCustomerCount = business.completedCustomerCount;
 
-  if (
-    absoluteClockUnit >= business.trafficStartsAtClockUnit &&
-    isScheduledCustomerArrival(definition, absoluteClockUnit)
-  ) {
+  if (hasScheduledArrival) {
     const demand = demandForCustomerSequence(definition, nextCustomerSequence);
     const customer: RoutineCustomer = {
       arrivedAtClockUnit: absoluteClockUnit,
@@ -384,29 +517,64 @@ export const advanceBusinessByClockUnit = (
     outcomes.push({ customerId: customer.id, ...demand, type: 'customer-arrived' });
   }
 
+  customers = customers.map((customer): RoutineCustomer => {
+    if (
+      customer.stage.type !== 'pump-service' &&
+      customer.stage.type !== 'checkout-service'
+    ) {
+      return customer;
+    }
+    const product = customer.stage.type === 'pump-service' ? 'fuel' : 'food';
+    const employee = product === 'fuel' ? pumpsEmployee : checkoutEmployee;
+    if (employee?.id === customer.stage.performance.employeeId) return customer;
+    outcomes.push({
+      customerId: customer.id,
+      employeeId: customer.stage.performance.employeeId,
+      product,
+      remainingClockUnits: customer.stage.remainingClockUnits,
+      type: 'service-interrupted',
+    });
+    return {
+      ...customer,
+      stage: { type: product === 'fuel' ? 'pump-queue' : 'checkout-queue' },
+    };
+  });
+
   if (
-    staffing.pumps &&
+    pumpsEmployee !== undefined &&
     !customers.some((customer) => customer.stage.type === 'pump-service')
   ) {
-    customers = startFirstQueuedCustomer(
+    const started = startFirstQueuedCustomer(
       customers,
       'pump-queue',
       'pump-service',
-      definition.products.fuel.serviceClockUnits,
+      definition,
+      pumpsEmployee,
+      'fuel',
+      nextRng,
       business.prices.fuel,
     );
+    customers = started.customers;
+    nextRng = started.rng;
+    if (started.outcome !== undefined) outcomes.push(started.outcome);
   }
   if (
-    staffing.checkout &&
+    checkoutEmployee !== undefined &&
     !customers.some((customer) => customer.stage.type === 'checkout-service')
   ) {
-    customers = startFirstQueuedCustomer(
+    const started = startFirstQueuedCustomer(
       customers,
       'checkout-queue',
       'checkout-service',
-      definition.products.food.serviceClockUnits,
+      definition,
+      checkoutEmployee,
+      'food',
+      nextRng,
       business.prices.food,
     );
+    customers = started.customers;
+    nextRng = started.rng;
+    if (started.outcome !== undefined) outcomes.push(started.outcome);
   }
 
   const completedIds = new Set<string>();
@@ -476,11 +644,14 @@ export const advanceBusinessByClockUnit = (
       activeCustomers: customers.filter((customer) => !completedIds.has(customer.id)),
       completedCustomerCount,
       nextCustomerSequence,
+      performanceBaselineReason: business.performanceBaselineReason,
+      performanceStartsAtClockUnit: business.performanceStartsAtClockUnit,
       prices: { ...business.prices },
       trafficBaselineReason: business.trafficBaselineReason,
       trafficStartsAtClockUnit: business.trafficStartsAtClockUnit,
     },
     outcomes,
     resources: nextResources,
+    rng: nextRng,
   };
 };

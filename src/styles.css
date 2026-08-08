@@ -1037,7 +1037,39 @@ button:focus-visible,
 
 .assignment-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
+}
+
+.assignment-option {
+  align-items: flex-end;
+  display: flex;
+  flex: 1 1 210px;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.assignment-option > span,
+.service-detail-list p {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  text-align: left;
+  width: 100%;
+}
+
+.service-detail-list {
+  background: color-mix(in srgb, var(--panel-raised) 88%, transparent);
+  border: 1px solid var(--rule);
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+}
+
+.service-detail-list p {
+  margin: 0;
 }
 
 .assignment-actions button {
@@ -1305,6 +1337,11 @@ button:focus-visible,
 
   .assignment-actions button {
     flex: 1;
+  }
+
+  .assignment-option {
+    align-items: stretch;
+    flex-basis: 100%;
   }
 
   .guide-number {

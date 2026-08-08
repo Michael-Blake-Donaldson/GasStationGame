@@ -85,6 +85,24 @@ const appendBusinessOutcome = (
         reason: 'routine-service-completed',
         type: 'sale.completed',
       });
+    case 'service-started':
+      return appendDomainEvent(state, {
+        customerId: outcome.customerId,
+        performance: outcome.performance,
+        product: outcome.product,
+        reason: 'employee-performance-snapshot',
+        type: 'service.started',
+        unitPrice: outcome.unitPrice,
+      });
+    case 'service-interrupted':
+      return appendDomainEvent(state, {
+        customerId: outcome.customerId,
+        employeeId: outcome.employeeId,
+        product: outcome.product,
+        reason: 'staffing-ended',
+        remainingClockUnits: outcome.remainingClockUnits,
+        type: 'service.interrupted',
+      });
     case 'customer-completed':
       return appendDomainEvent(state, {
         customerId: outcome.customerId,
@@ -99,8 +117,8 @@ const advanceBusinessForCurrentClockUnit = (
   state: SimulationState,
   context: SimulationContext,
 ): SimulationState => {
-  const isStaffing = (jobId: string): boolean =>
-    state.employees.some(
+  const staffingEmployee = (jobId: string) =>
+    state.employees.find(
       (employee) =>
         employee.activity.status === 'working' && employee.activity.jobId === jobId,
     );
@@ -110,14 +128,16 @@ const advanceBusinessForCurrentClockUnit = (
     state.resources,
     state.absoluteClockUnit,
     {
-      checkout: isStaffing('staff-checkout'),
-      pumps: isStaffing('staff-pumps'),
+      checkout: staffingEmployee('staff-checkout'),
+      pumps: staffingEmployee('staff-pumps'),
     },
+    state.rng,
   );
   let next = {
     ...state,
     business: result.business,
     resources: result.resources,
+    rng: result.rng,
   };
   for (const outcome of result.outcomes) {
     next = appendBusinessOutcome(next, outcome);

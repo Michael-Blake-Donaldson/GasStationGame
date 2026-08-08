@@ -8,7 +8,7 @@ Last updated: 2026-08-08
 
 - **Severity:** Expected / P0 roadmap gap
 - **Status:** Partially resolved 2026-08-08
-- **Progress:** GS-020 connects routine customers, pump/checkout staffing, prices, inventory orders, queue totals, served totals, resources, receipts, and event history through the authoritative command/event foundation.
+- **Progress:** GS-020 connects routine customers, pump/checkout staffing, prices, inventory orders, queue totals, served totals, resources, receipts, and event history through the authoritative command/event foundation. GS-021 adds inspectable pump/checkout skill, fatigue, exact duration/error arithmetic, attributed active service, interruption/requeue, and deterministic rework.
 - **Remaining boundary:** Power allocation, camera controls, threat tags, and most station objects remain previews until GS-022 and GS-030 through GS-035. The current build has a playable day-business loop, not a complete vertical slice.
 
 ### KI-002 — Simulation clock is not yet a replay-grade fixed-step engine
@@ -55,7 +55,7 @@ Last updated: 2026-08-08
 
 - **Severity:** Low
 - **Status:** Open
-- **Symptoms:** React, Tauri's title/recovery adapters, the deterministic simulation/persistence/business foundation, and the direct Three.js prototype currently produce one 901.60 kB minified JavaScript asset (241.54 kB gzip), which now triggers Vite's 900 kB advisory.
+- **Symptoms:** React, Tauri's title/recovery adapters, the deterministic simulation/persistence/business foundation, and the direct Three.js prototype currently produce one 915.85 kB minified JavaScript asset (245.03 kB gzip), which triggers Vite's 900 kB advisory.
 - **Impact:** Startup is acceptable for the scaffold but may grow without an asset/scene loading boundary.
 - **Plan:** Add an intentional scene/platform loading boundary before the bundle grows further, then measure startup and target scenes in GS-056. Keep the advisory visible until a measured split resolves it rather than raising the threshold again.
 
@@ -87,6 +87,14 @@ Last updated: 2026-08-08
 - **Symptoms:** Great Plains occupancy, interaction cells, employee routes, and job progress are deterministic and replayable. GS-020 exposes pump/checkout assignments and cancellation in the shift board, but employees and routes are not rendered in the procedural station scene, which is not yet generated from authoritative occupancy.
 - **Impact:** Staffing is playable and inspectable in text, but travel and placement feedback are not visible in the world.
 - **Plan:** Project employees and selection/path feedback downstream of simulation state; GS-022/023 add construction and construction-time path validation without letting placeholder art dictate domain geometry.
+
+### KI-012 — Employee performance is intentionally static and retail-scoped
+
+- **Severity:** Expected / P0 roadmap gap
+- **Status:** Open
+- **Symptoms:** Exact authored skill and fatigue affect routine pump/checkout speed and rework risk, but repeated work does not yet grant experience and fatigue does not yet rise or recover. Generic jobs, travel, construction, and night work use authored fixed durations.
+- **Impact:** GS-021 proves the deterministic/inspectable modifier seam without yet delivering the GDD's long-term people progression or needs loop.
+- **Plan:** Add customer-pressure fatigue accumulation with GS-024 only when recovery/rest counterplay exists; add exact change history, traits, relationships, injuries, buffs/debuffs, and longer-term progression under GS-040. Do not silently mutate these values before their events and recovery rules exist.
 
 ## Product and design risks
 

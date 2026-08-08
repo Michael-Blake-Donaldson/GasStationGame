@@ -48,7 +48,7 @@ Record correctness, hesitation, and any panel opened.
 
 ### 2. Day-one operation
 
-Ask the player to reopen services and prepare for the forecast. Observe selection, assignment, queues, stocking, prices, construction, placement errors, camera control, and pause use. Do not suggest an optimal layout.
+Ask the player to reopen services and prepare for the forecast. Observe selection, assignment, skill/fatigue comparisons, exact speed/error explanations, queues, stocking, prices, construction, placement errors, camera control, and pause use. Ask which worker they expect to perform better and why, then compare that answer with the displayed arithmetic. Clear one active service assignment and confirm the player understands why the customer requeued. Do not suggest an optimal layout.
 
 ### 3. Dusk explanation
 

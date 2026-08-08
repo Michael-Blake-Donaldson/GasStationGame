@@ -1,6 +1,6 @@
 # Decision Log
 
-Last updated: 2026-08-07
+Last updated: 2026-08-08
 
 Decisions are append-only. To change one, add a new decision that supersedes it and update the old status.
 
@@ -132,3 +132,11 @@ Decisions are append-only. To change one, add a new decision that supersedes it 
 - **Context:** The first playable day loop needs understandable operational pressure without introducing unreviewed randomness, customer micromanagement, or duplicate resource authorities.
 - **Decision:** Generate routine customers from disjoint authored traffic windows and sequence-derived fuel/food demand. Route each customer through a single pump lane and, when needed, a single checkout lane. Workstations are staffed only by employees actively working the corresponding scenario job. Service snapshots the current integer unit price, consumes the existing fuel/food resources, adds exact cash, and emits arrival, sale, and completion facts. Price changes and immediate wholesale orders are daytime typed commands. Customer patience, theft, skill/fatigue modifiers, multiple lanes, and important travelers remain later systems.
 - **Consequences:** Identical content, commands, and clock progression reproduce the same queues and ledger without consuming RNG. Scenario/replay v4, checkpoint v6, and save v2 include business state. V1 saves migrate by removing the retired fake daytime flow and starting routine traffic from their next future authored arrival; historical money is never silently presented as a sale. The first UI is an operations dialog over commands and snapshots, not a second business model.
+
+## DEC-017 — Snapshot inspectable employee performance at routine service start
+
+- **Date:** 2026-08-08
+- **Status:** Accepted
+- **Context:** The GDD requires job experience to improve speed/accuracy and fatigue to reduce reliability, while the deterministic architecture requires every outcome to survive replay and save/load exactly.
+- **Decision:** Author pump and checkout skill as canonical integer levels from 0–5 and retain fatigue as an exact integer from 0–100. At service start, calculate duration and rework chance using authored integer-permille rules, consume one bounded draw from the canonical xoshiro RNG, and snapshot every input, contribution, final value, roll cursor, and outcome. A mistake adds authored rework time only; it never silently changes cash or stock. If the attributed worker stops staffing, emit `service.interrupted`, requeue the customer, and require a newly attributed snapshot before progress resumes.
+- **Consequences:** Scenario/replay advance to version 5, checkpoints to version 7, and saves to schema v3. V2 active service migrates to its queue at an explicit performance baseline so no historical modifier or RNG fact is invented. Skill XP, fatigue gain/recovery, traits, relationships, injuries, customer patience, and job-wide performance remain deferred to their named backlog systems.

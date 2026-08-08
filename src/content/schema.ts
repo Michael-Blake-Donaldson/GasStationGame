@@ -60,8 +60,31 @@ const workSubjectSchema = z.discriminatedUnion('kind', [
 ]);
 
 export const initialEmployeePositionSchema = z.object({
+  fatigue: z.number().int().min(0).max(100),
   employeeId: technicalIdSchema,
+  name: z.string().min(1),
   position: gridCoordinateSchema,
+  relationship: z.number().int(),
+  role: z.string().min(1),
+  skills: z
+    .array(
+      z.object({
+        id: technicalIdSchema,
+        level: z.number().int().min(0).max(5),
+      }),
+    )
+    .min(1)
+    .superRefine((skills, context) => {
+      for (const [index, skill] of skills.entries()) {
+        if (index > 0 && skill.id <= (skills[index - 1]?.id ?? '')) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Employee skills must use unique ascending IDs.',
+          });
+          return;
+        }
+      }
+    }),
 });
 
 export const workTargetDefinitionSchema = z.object({
@@ -77,16 +100,26 @@ export const jobDefinitionSchema = z.object({
 });
 
 const retailProductDefinitionSchema = z.object({
+  baseErrorChancePermille: z.number().int().min(0).max(1000),
   baseDemandUnits: z.number().int().nonnegative(),
   defaultUnitPrice: z.number().int().positive(),
   demandStepUnits: z.number().int().nonnegative(),
   demandVariationCount: z.number().int().positive(),
+  errorReworkClockUnits: z.number().int().nonnegative(),
   maximumUnitPrice: z.number().int().positive(),
   serviceClockUnits: z.number().int().positive(),
+  serviceSkillId: technicalIdSchema,
   wholesaleUnitCost: z.number().int().positive(),
 });
 
 export const businessDefinitionSchema = z.object({
+  performanceRules: z.object({
+    fatigueErrorPenaltyPermillePerTen: z.number().int().nonnegative(),
+    fatigueSpeedPenaltyPermillePerTen: z.number().int().nonnegative(),
+    maximumErrorChancePermille: z.number().int().min(0).max(1000),
+    skillErrorReductionPermillePerLevel: z.number().int().nonnegative(),
+    skillSpeedReductionPermillePerLevel: z.number().int().nonnegative(),
+  }),
   products: z.object({
     food: retailProductDefinitionSchema,
     fuel: retailProductDefinitionSchema,

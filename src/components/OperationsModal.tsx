@@ -1,5 +1,6 @@
 import { greatPlainsRegion } from '../content/regions/greatPlains';
 import type { SimulationState } from '../game/simulation/types';
+import { calculateServicePerformance } from '../game/simulation/employeePerformance';
 import { Modal } from './Modal';
 
 type RetailProduct = 'food' | 'fuel';
@@ -21,9 +22,16 @@ const PRODUCT_LABEL: Record<RetailProduct, string> = {
   fuel: 'Pump fuel',
 };
 const JOBS = [
-  { id: 'staff-pumps', label: 'Pumps' },
-  { id: 'staff-checkout', label: 'Checkout' },
+  { id: 'staff-pumps', label: 'Pumps', product: 'fuel' },
+  { id: 'staff-checkout', label: 'Checkout', product: 'food' },
 ] as const;
+
+const formatPermille = (value: number): string => `${(value / 10).toFixed(1)}%`;
+
+const performanceArithmetic = (
+  performance: ReturnType<typeof calculateServicePerformance>,
+): string =>
+  `${String(performance.baseServiceClockUnits)} base × ${formatPermille(performance.speedPermille)} (${formatPermille(performance.skillSpeedReductionPermille)} skill reduction + ${formatPermille(performance.fatigueSpeedPenaltyPermille)} fatigue penalty) = ${String(performance.adjustedServiceClockUnits)} units · error ${formatPermille(performance.baseErrorChancePermille)} base − ${formatPermille(performance.skillErrorReductionPermille)} skill + ${formatPermille(performance.fatigueErrorPenaltyPermille)} fatigue = ${formatPermille(performance.errorChancePermille)}`;
 
 const titleCaseStage = (stage: string): string =>
   stage
@@ -53,6 +61,11 @@ export const OperationsModal = ({
   const checkoutCustomers = simulation.business.activeCustomers.filter((customer) =>
     customer.stage.type.startsWith('checkout-'),
   ).length;
+  const activeServices = simulation.business.activeCustomers.filter(
+    (customer) =>
+      customer.stage.type === 'pump-service' ||
+      customer.stage.type === 'checkout-service',
+  );
 
   return (
     <Modal
@@ -75,6 +88,40 @@ export const OperationsModal = ({
           <strong>{simulation.business.completedCustomerCount}</strong>
         </div>
       </div>
+
+      {activeServices.length > 0 ? (
+        <div className="service-detail-list" aria-label="Active service modifiers">
+          {activeServices.map((customer) => {
+            if (
+              customer.stage.type !== 'pump-service' &&
+              customer.stage.type !== 'checkout-service'
+            ) {
+              return null;
+            }
+            const { performance } = customer.stage;
+            const employee = simulation.employees.find(
+              ({ id }) => id === performance.employeeId,
+            );
+            return (
+              <p key={customer.id}>
+                <strong>
+                  {customer.stage.type === 'pump-service' ? 'Pump' : 'Checkout'} /{' '}
+                  {employee?.name ?? performance.employeeId}
+                </strong>{' '}
+                — {performance.skillId} {performance.skillLevel}/5, fatigue{' '}
+                {performance.fatigue}/100, {customer.stage.remainingClockUnits}/
+                {performance.totalClockUnits} units.{' '}
+                {performanceArithmetic(performance)}. Roll{' '}
+                {formatPermille(performance.errorRoll)} against{' '}
+                {formatPermille(performance.errorChancePermille)}.
+                {performance.errorOccurred
+                  ? `, deterministic rework +${String(performance.errorReworkClockUnits)}`
+                  : ''}
+              </p>
+            );
+          })}
+        </div>
+      ) : null}
 
       {isDayOpen ? null : (
         <p className="operations-closed" role="note">
@@ -170,17 +217,36 @@ export const OperationsModal = ({
                 </div>
                 <div className="assignment-actions">
                   {activity.status === 'idle' ? (
-                    JOBS.map((job) => (
-                      <button
-                        aria-label={`Assign ${employee.name} to ${job.label.toLowerCase()}`}
-                        disabled={!isDayOpen || occupiedJobIds.has(job.id)}
-                        key={job.id}
-                        onClick={() => onAssignJob(employee.id, job.id)}
-                        type="button"
-                      >
-                        {job.label}
-                      </button>
-                    ))
+                    JOBS.map((job) => {
+                      const definition =
+                        greatPlainsRegion.business.products[job.product];
+                      const performance = calculateServicePerformance(
+                        employee,
+                        definition,
+                        greatPlainsRegion.business.performanceRules,
+                        999,
+                        0,
+                      );
+                      const descriptionId = `${employee.id}-${job.id}-performance`;
+                      return (
+                        <div className="assignment-option" key={job.id}>
+                          <span id={descriptionId}>
+                            {performance.skillId} {performance.skillLevel}/5 · fatigue{' '}
+                            {performance.fatigue}/100 ·{' '}
+                            {performanceArithmetic(performance)}
+                          </span>
+                          <button
+                            aria-label={`Assign ${employee.name} to ${job.label.toLowerCase()}`}
+                            aria-describedby={descriptionId}
+                            disabled={!isDayOpen || occupiedJobIds.has(job.id)}
+                            onClick={() => onAssignJob(employee.id, job.id)}
+                            type="button"
+                          >
+                            {job.label}
+                          </button>
+                        </div>
+                      );
+                    })
                   ) : (
                     <button
                       aria-label={`Clear ${employee.name}'s assignment`}

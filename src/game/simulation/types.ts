@@ -1,6 +1,7 @@
 import type { SeededRandomState } from './random';
 import type { GridCoordinate, StationOccupancyState } from './grid';
 import type { BusinessState } from './business';
+import type { ServicePerformanceSnapshot } from './employeePerformance';
 
 export type SimulationPhase = 'morning' | 'day' | 'dusk' | 'night';
 export type TimeMode = 'paused' | 'slow' | 'normal' | 'fast';
@@ -22,6 +23,12 @@ export interface Employee {
   readonly position: GridCoordinate;
   readonly relationship: number;
   readonly role: string;
+  readonly skills: readonly EmployeeSkill[];
+}
+
+export interface EmployeeSkill {
+  readonly id: string;
+  readonly level: number;
 }
 
 export type EmployeeActivity =
@@ -163,6 +170,22 @@ export type DomainEvent =
       fuelUnitsRequested: number;
       reason: 'authored-traffic-schedule';
       type: 'customer.arrived';
+    })
+  | (DomainEventBase & {
+      customerId: string;
+      performance: ServicePerformanceSnapshot;
+      product: 'food' | 'fuel';
+      reason: 'employee-performance-snapshot';
+      type: 'service.started';
+      unitPrice: number;
+    })
+  | (DomainEventBase & {
+      customerId: string;
+      employeeId: string;
+      product: 'food' | 'fuel';
+      reason: 'staffing-ended';
+      remainingClockUnits: number;
+      type: 'service.interrupted';
     })
   | (DomainEventBase & {
       cashAfter: number;

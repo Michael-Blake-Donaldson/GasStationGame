@@ -9,6 +9,7 @@ import {
   type StationOccupancyState,
 } from './grid';
 import { findStationPath } from './pathfinding';
+import { assertBusinessDefinition } from './business';
 import type {
   JobDefinition,
   ScenarioDefinition,
@@ -79,6 +80,7 @@ export const assertScenarioDefinition = (scenario: ScenarioDefinition): void => 
   assertTechnicalId(scenario.id, 'scenario.id');
   assertPositiveSafeInteger(scenario.version, 'scenario.version');
   assertStationGridDefinition(scenario.stationGridDefinition);
+  assertBusinessDefinition(scenario.business);
   assertUniqueIds(scenario.workTargets, 'scenario.workTargets');
   assertUniqueIds(scenario.jobs, 'scenario.jobs');
 
@@ -96,6 +98,35 @@ export const assertScenarioDefinition = (scenario: ScenarioDefinition): void => 
       );
     }
     positionedEmployees.add(position.employeeId);
+    if (
+      position.name.trim().length === 0 ||
+      position.role.trim().length === 0 ||
+      !Number.isSafeInteger(position.fatigue) ||
+      position.fatigue < 0 ||
+      position.fatigue > 100 ||
+      !Number.isSafeInteger(position.relationship)
+    ) {
+      throw new RangeError(`Employee ${position.employeeId} profile is invalid.`);
+    }
+    const requiredSkillIds = new Set([
+      scenario.business.products.food.serviceSkillId,
+      scenario.business.products.fuel.serviceSkillId,
+    ]);
+    const skillIds = position.skills.map(({ id }) => id);
+    if (
+      position.skills.some(
+        ({ id, level }) =>
+          !requiredSkillIds.has(id) ||
+          !Number.isSafeInteger(level) ||
+          level < 0 ||
+          level > 5,
+      ) ||
+      new Set(skillIds).size !== skillIds.length ||
+      skillIds.some((id, index) => index > 0 && id <= (skillIds[index - 1] ?? '')) ||
+      [...requiredSkillIds].some((id) => !skillIds.includes(id))
+    ) {
+      throw new RangeError(`Employee ${position.employeeId} skills are invalid.`);
+    }
     if (!isGridCellInBounds(scenario.stationGridDefinition, position.position)) {
       throw new RangeError(
         `Employee ${position.employeeId} starts outside the station grid.`,

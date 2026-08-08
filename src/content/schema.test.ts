@@ -32,4 +32,40 @@ describe('region content schema', () => {
       }),
     ).toThrow();
   });
+
+  it('rejects malformed employee performance content', () => {
+    const employee = greatPlainsRegion.initialEmployeePositions[0];
+    expect(employee).toBeDefined();
+    if (employee === undefined) return;
+    expect(() =>
+      regionSchema.parse({
+        ...greatPlainsRegion,
+        initialEmployeePositions: [
+          { ...employee, fatigue: 101 },
+          ...greatPlainsRegion.initialEmployeePositions.slice(1),
+        ],
+      }),
+    ).toThrow();
+    expect(() =>
+      regionSchema.parse({
+        ...greatPlainsRegion,
+        initialEmployeePositions: [
+          { ...employee, skills: [...employee.skills].reverse() },
+          ...greatPlainsRegion.initialEmployeePositions.slice(1),
+        ],
+      }),
+    ).toThrow(/unique ascending IDs/u);
+    expect(() =>
+      regionSchema.parse({
+        ...greatPlainsRegion,
+        business: {
+          ...greatPlainsRegion.business,
+          performanceRules: {
+            ...greatPlainsRegion.business.performanceRules,
+            maximumErrorChancePermille: 1001,
+          },
+        },
+      }),
+    ).toThrow();
+  });
 });

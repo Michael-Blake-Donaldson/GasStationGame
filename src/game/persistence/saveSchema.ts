@@ -4,7 +4,7 @@ import { SIMULATION_CHECKPOINT_VERSION } from '../simulation/checkpoint';
 import { SEEDED_RANDOM_ALGORITHM, SEEDED_RANDOM_VERSION } from '../simulation/random';
 
 export const SAVE_FORMAT_ID = 'station-campaign-save' as const;
-export const SAVE_SCHEMA_VERSION = 2 as const;
+export const SAVE_SCHEMA_VERSION = 3 as const;
 export const SAVE_CHECKSUM_ALGORITHM = 'fnv1a32' as const;
 export const SAVE_SETTINGS_VERSION = 1 as const;
 export const SAVE_DIFFICULTY_VERSION = 1 as const;
@@ -76,7 +76,7 @@ const workingActivity = z
     totalWorkClockUnits: positiveSafeInteger,
   })
   .strict();
-const employee = z
+const employeeV6 = z
   .object({
     activity: z.discriminatedUnion('status', [
       idleActivity,
@@ -91,6 +91,15 @@ const employee = z
     role: nonEmptyString,
   })
   .strict();
+const employeeV7 = employeeV6.extend({
+  fatigue: z.number().int().min(0).max(100),
+  relationship: safeInteger,
+  skills: z
+    .array(
+      z.object({ id: technicalId, level: z.number().int().min(0).max(5) }).strict(),
+    )
+    .min(1),
+});
 
 const eventBase = z.object({
   absoluteClockUnit: nonNegativeSafeInteger,
@@ -300,13 +309,61 @@ const domainEventV6 = z.discriminatedUnion('type', [
   retailPriceChangedEvent,
   inventoryOrderedEvent,
 ]);
+const servicePerformanceSnapshot = z
+  .object({
+    adjustedServiceClockUnits: positiveSafeInteger,
+    baseErrorChancePermille: nonNegativeSafeInteger,
+    baseServiceClockUnits: positiveSafeInteger,
+    employeeId: technicalId,
+    errorChancePermille: nonNegativeSafeInteger,
+    errorOccurred: z.boolean(),
+    errorReworkClockUnits: nonNegativeSafeInteger,
+    errorRoll: z.number().int().min(0).max(999),
+    fatigue: z.number().int().min(0).max(100),
+    fatigueErrorPenaltyPermille: nonNegativeSafeInteger,
+    fatigueSpeedPenaltyPermille: nonNegativeSafeInteger,
+    fatigueTier: z.number().int().min(0).max(10),
+    rngDrawCount: positiveSafeInteger,
+    skillErrorReductionPermille: nonNegativeSafeInteger,
+    skillId: technicalId,
+    skillLevel: z.number().int().min(0).max(5),
+    skillSpeedReductionPermille: nonNegativeSafeInteger,
+    speedPermille: z.number().int().min(500).max(2000),
+    totalClockUnits: positiveSafeInteger,
+  })
+  .strict();
+const serviceStartedEvent = eventBase
+  .extend({
+    customerId: technicalId,
+    performance: servicePerformanceSnapshot,
+    product: z.enum(['food', 'fuel']),
+    reason: z.literal('employee-performance-snapshot'),
+    type: z.literal('service.started'),
+    unitPrice: positiveSafeInteger,
+  })
+  .strict();
+const serviceInterruptedEvent = eventBase
+  .extend({
+    customerId: technicalId,
+    employeeId: technicalId,
+    product: z.enum(['food', 'fuel']),
+    reason: z.literal('staffing-ended'),
+    remainingClockUnits: positiveSafeInteger,
+    type: z.literal('service.interrupted'),
+  })
+  .strict();
+const domainEventV7 = z.discriminatedUnion('type', [
+  ...domainEventV6.options,
+  serviceInterruptedEvent,
+  serviceStartedEvent,
+]);
 
 export const simulationCheckpointV5Schema = z
   .object({
     absoluteClockUnit: nonNegativeSafeInteger,
     clockStepRemainderTimeUnits: nonNegativeSafeInteger,
     completedNights: nonNegativeSafeInteger,
-    employees: z.array(employee),
+    employees: z.array(employeeV6),
     eventLedger: z.array(domainEventV5).min(1),
     isSliceComplete: z.boolean(),
     nextEventSequence: nonNegativeSafeInteger,
@@ -395,6 +452,51 @@ const businessState = z
 export const simulationCheckpointV6Schema = simulationCheckpointV5Schema.extend({
   business: businessState,
   eventLedger: z.array(domainEventV6).min(1),
+  version: z.literal(6),
+});
+
+const customerStageV7 = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('checkout-queue') }).strict(),
+  z.object({ type: z.literal('pump-queue') }).strict(),
+  z
+    .object({
+      performance: servicePerformanceSnapshot,
+      remainingClockUnits: positiveSafeInteger,
+      type: z.literal('checkout-service'),
+      unitPrice: positiveSafeInteger,
+    })
+    .strict(),
+  z
+    .object({
+      performance: servicePerformanceSnapshot,
+      remainingClockUnits: positiveSafeInteger,
+      type: z.literal('pump-service'),
+      unitPrice: positiveSafeInteger,
+    })
+    .strict(),
+]);
+const businessStateV7 = businessState.extend({
+  activeCustomers: z.array(
+    z
+      .object({
+        arrivedAtClockUnit: nonNegativeSafeInteger,
+        foodUnitsRequested: nonNegativeSafeInteger,
+        fuelUnitsRequested: nonNegativeSafeInteger,
+        id: technicalId,
+        revenue: nonNegativeSafeInteger,
+        sequence: nonNegativeSafeInteger,
+        stage: customerStageV7,
+      })
+      .strict(),
+  ),
+  performanceBaselineReason: z.enum(['legacy-save-migration', 'scenario-start']),
+  performanceStartsAtClockUnit: nonNegativeSafeInteger,
+});
+
+export const simulationCheckpointV7Schema = simulationCheckpointV6Schema.extend({
+  business: businessStateV7,
+  employees: z.array(employeeV7),
+  eventLedger: z.array(domainEventV7).min(1),
   version: z.literal(SIMULATION_CHECKPOINT_VERSION),
 });
 
@@ -444,7 +546,7 @@ export const saveDocumentV1Schema = savePayloadV1Schema
   .strict();
 
 export const savePayloadV2Schema = savePayloadV1Schema.extend({
-  schemaVersion: z.literal(SAVE_SCHEMA_VERSION),
+  schemaVersion: z.literal(2),
   station: simulationCheckpointV6Schema,
 });
 
@@ -459,7 +561,25 @@ export const saveDocumentV2Schema = savePayloadV2Schema
   })
   .strict();
 
+export const savePayloadV3Schema = savePayloadV2Schema.extend({
+  schemaVersion: z.literal(SAVE_SCHEMA_VERSION),
+  station: simulationCheckpointV7Schema,
+});
+
+export const saveDocumentV3Schema = savePayloadV3Schema
+  .extend({
+    checksum: z
+      .object({
+        algorithm: z.literal(SAVE_CHECKSUM_ALGORITHM),
+        value: z.string().regex(/^[0-9a-f]{8}$/u),
+      })
+      .strict(),
+  })
+  .strict();
+
 export type SaveDocumentV1 = z.infer<typeof saveDocumentV1Schema>;
 export type SavePayloadV1 = z.infer<typeof savePayloadV1Schema>;
 export type SaveDocumentV2 = z.infer<typeof saveDocumentV2Schema>;
 export type SavePayloadV2 = z.infer<typeof savePayloadV2Schema>;
+export type SaveDocumentV3 = z.infer<typeof saveDocumentV3Schema>;
+export type SavePayloadV3 = z.infer<typeof savePayloadV3Schema>;

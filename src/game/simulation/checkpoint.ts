@@ -4,7 +4,7 @@ import type { SimulationContext } from './scenario';
 import type { DomainEvent, Employee, SimulationState } from './types';
 import { assertSimulationState } from './validation';
 
-export const SIMULATION_CHECKPOINT_VERSION = 6;
+export const SIMULATION_CHECKPOINT_VERSION = 7;
 
 const cloneDomainEvent = (event: DomainEvent): DomainEvent => {
   switch (event.type) {
@@ -16,6 +16,8 @@ const cloneDomainEvent = (event: DomainEvent): DomainEvent => {
     case 'job.cancelled':
     case 'job.completed':
       return { ...event, position: { ...event.position } };
+    case 'service.started':
+      return { ...event, performance: { ...event.performance } };
     default:
       return { ...event };
   }
@@ -41,6 +43,7 @@ const cloneEmployee = (employee: Employee): Employee => ({
   position: { ...employee.position },
   relationship: employee.relationship,
   role: employee.role,
+  skills: employee.skills.map((skill) => ({ ...skill })),
 });
 
 const clonePlacedOccupant = (occupant: PlacedOccupant): PlacedOccupant =>
@@ -64,10 +67,19 @@ export const createSimulationCheckpoint = (
     business: {
       activeCustomers: state.business.activeCustomers.map((customer) => ({
         ...customer,
-        stage: { ...customer.stage },
+        stage:
+          customer.stage.type === 'pump-service' ||
+          customer.stage.type === 'checkout-service'
+            ? {
+                ...customer.stage,
+                performance: { ...customer.stage.performance },
+              }
+            : { ...customer.stage },
       })),
       completedCustomerCount: state.business.completedCustomerCount,
       nextCustomerSequence: state.business.nextCustomerSequence,
+      performanceBaselineReason: state.business.performanceBaselineReason,
+      performanceStartsAtClockUnit: state.business.performanceStartsAtClockUnit,
       prices: { ...state.business.prices },
       trafficBaselineReason: state.business.trafficBaselineReason,
       trafficStartsAtClockUnit: state.business.trafficStartsAtClockUnit,
@@ -111,7 +123,7 @@ export const createSimulationCheckpoint = (
   };
 };
 
-export type SimulationCheckpointV6 = ReturnType<typeof createSimulationCheckpoint>;
+export type SimulationCheckpointV7 = ReturnType<typeof createSimulationCheckpoint>;
 
 export const hashSimulationState = (
   state: SimulationState,

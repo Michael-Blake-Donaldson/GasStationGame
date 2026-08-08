@@ -15,7 +15,7 @@ import {
   runClockReplay as runSimulationClockReplay,
   runScenarioReplay as runSimulationScenarioReplay,
   type ClockReplayV1,
-  type ScenarioReplayV4,
+  type ScenarioReplayV5,
 } from '../simulation/replay';
 import {
   GREAT_PLAINS_SCENARIO_ID,
@@ -33,7 +33,7 @@ export type {
   ClockReplayResult,
   ClockReplayV1,
   ScenarioReplayResult,
-  ScenarioReplayV4,
+  ScenarioReplayV5,
   ScenarioReplayStopReason,
 } from '../simulation/replay';
 
@@ -77,7 +77,7 @@ export const encodeGameSave = (snapshot: GameSaveSnapshot) =>
 export const decodeGameSave = (serialized: string) =>
   decodeSave(serialized, greatPlainsSaveContext);
 
-export const runScenarioReplay = (replay: ScenarioReplayV4) =>
+export const runScenarioReplay = (replay: ScenarioReplayV5) =>
   runSimulationScenarioReplay(replay, greatPlainsSimulationContext);
 
 export const runClockReplay = (replay: ClockReplayV1) =>

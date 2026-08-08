@@ -15,6 +15,7 @@ import {
   createInitialState,
   dispatchSimulationCommand,
   greatPlainsSimulationContext,
+  hashSimulationState,
 } from '../scenarios/greatPlains';
 import { appendDomainEvent } from './events';
 import type { SimulationState, TimeMode } from './types';
@@ -182,6 +183,37 @@ describe('station simulation clock', () => {
         type: 'sale.completed',
       }),
     );
+  });
+
+  it('requeues attributed service when its worker assignment is cleared', () => {
+    let state = createInitialState(1);
+    state = dispatchSimulationCommand(state, {
+      atTick: 0,
+      command: {
+        employeeId: 'employee-bo',
+        jobId: 'staff-pumps',
+        type: 'job.assign',
+      },
+      id: 'interrupt-staff-pumps',
+      sequence: 0,
+    }).state;
+    state = advanceSimulationByClockUnits(state, 61 * CLOCK_UNITS_PER_MINUTE);
+    expect(state.business.activeCustomers[0]?.stage.type).toBe('pump-service');
+    state = dispatchSimulationCommand(state, {
+      atTick: state.tick,
+      command: { employeeId: 'employee-bo', type: 'job.cancel' },
+      id: 'interrupt-clear-pumps',
+      sequence: 1,
+    }).state;
+    const interrupted = advanceSimulationByClockUnits(state, 1);
+
+    expect(interrupted.business.activeCustomers[0]?.stage.type).toBe('pump-queue');
+    expect(interrupted.eventLedger.at(-1)).toMatchObject({
+      employeeId: 'employee-bo',
+      product: 'fuel',
+      type: 'service.interrupted',
+    });
+    expect(() => hashSimulationState(interrupted)).not.toThrow();
   });
 
   it('reconciles every authored customer across a fully staffed business day', () => {

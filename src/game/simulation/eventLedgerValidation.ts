@@ -5,6 +5,10 @@ import {
   isScheduledCustomerArrival,
 } from './business';
 import {
+  calculateServicePerformance,
+  type ServicePerformanceSnapshot,
+} from './employeePerformance';
+import {
   CLOCK_UNITS_PER_MINUTE,
   effectiveTimeMode,
   phaseForClockUnit,
@@ -270,6 +274,12 @@ const assertTimeModeHistory = (state: SimulationState): void => {
 };
 
 interface TrackedCustomer {
+  activeService?: {
+    readonly performance: ServicePerformanceSnapshot;
+    readonly product: 'food' | 'fuel';
+    readonly startedAtClockUnit: number;
+    readonly unitPrice: number;
+  };
   readonly expectedProducts: readonly ('food' | 'fuel')[];
   readonly sequence: number;
   nextProductIndex: number;
@@ -287,8 +297,18 @@ const assertBusinessHistory = (
   const customers = new Map<string, TrackedCustomer>();
   let nextCustomerSequence = 0;
   let completedCustomerCount = 0;
+  const activeJobsByEmployee = new Map<string, string>();
+  let previousServiceRngDrawCount = 0;
 
   for (const event of state.eventLedger) {
+    if (event.type === 'job.started') {
+      activeJobsByEmployee.set(event.employeeId, event.jobId);
+      continue;
+    }
+    if (event.type === 'job.cancelled' || event.type === 'job.completed') {
+      activeJobsByEmployee.delete(event.employeeId);
+      continue;
+    }
     if (event.type === 'customer.arrived') {
       const demand = demandForCustomerSequence(definition, nextCustomerSequence);
       const customerId = `routine-customer-${String(nextCustomerSequence)}`;
@@ -309,6 +329,67 @@ const assertBusinessHistory = (
         status: 'active',
       });
       nextCustomerSequence += 1;
+      continue;
+    }
+    if (event.type === 'service.started') {
+      const customer = customers.get(event.customerId);
+      const employee = state.employees.find(
+        ({ id }) => id === event.performance.employeeId,
+      );
+      const expectedProduct = customer?.expectedProducts[customer.nextProductIndex];
+      const expectedJobId = event.product === 'fuel' ? 'staff-pumps' : 'staff-checkout';
+      if (
+        customer?.status !== 'active' ||
+        customer.activeService !== undefined ||
+        expectedProduct !== event.product ||
+        employee === undefined ||
+        activeJobsByEmployee.get(employee.id) !== expectedJobId ||
+        event.absoluteClockUnit < state.business.performanceStartsAtClockUnit ||
+        event.unitPrice !== prices[event.product] ||
+        event.performance.rngDrawCount <= previousServiceRngDrawCount ||
+        event.performance.rngDrawCount > state.rng.drawCount
+      ) {
+        throw new RangeError('Service start is not causally available.');
+      }
+      const expectedPerformance = calculateServicePerformance(
+        employee,
+        definition.products[event.product],
+        definition.performanceRules,
+        event.performance.errorRoll,
+        event.performance.rngDrawCount,
+      );
+      if (JSON.stringify(event.performance) !== JSON.stringify(expectedPerformance)) {
+        throw new RangeError('Service performance event does not match its modifiers.');
+      }
+      customer.activeService = {
+        performance: expectedPerformance,
+        product: event.product,
+        startedAtClockUnit: event.absoluteClockUnit,
+        unitPrice: event.unitPrice,
+      };
+      previousServiceRngDrawCount = event.performance.rngDrawCount;
+      continue;
+    }
+    if (event.type === 'service.interrupted') {
+      const customer = customers.get(event.customerId);
+      const activeService = customer?.activeService;
+      const expectedJobId = event.product === 'fuel' ? 'staff-pumps' : 'staff-checkout';
+      const expectedRemaining =
+        activeService === undefined
+          ? 0
+          : activeService.performance.totalClockUnits -
+            (event.absoluteClockUnit - activeService.startedAtClockUnit);
+      if (
+        customer?.status !== 'active' ||
+        activeService?.product !== event.product ||
+        activeService.performance.employeeId !== event.employeeId ||
+        activeJobsByEmployee.get(event.employeeId) === expectedJobId ||
+        event.remainingClockUnits !== expectedRemaining ||
+        expectedRemaining < 1
+      ) {
+        throw new RangeError('Service interruption does not match staffing history.');
+      }
+      delete customer.activeService;
       continue;
     }
     if (event.type === 'sale.completed') {
@@ -334,12 +415,26 @@ const assertBusinessHistory = (
       ) {
         throw new RangeError('Sale event does not match its customer lifecycle.');
       }
+      if (event.absoluteClockUnit >= state.business.performanceStartsAtClockUnit) {
+        const activeService = customer.activeService;
+        if (
+          activeService?.product !== event.product ||
+          activeService.unitPrice !== event.unitPrice ||
+          event.absoluteClockUnit !==
+            activeService.startedAtClockUnit +
+              activeService.performance.totalClockUnits -
+              1
+        ) {
+          throw new RangeError('Sale event does not follow its attributed service.');
+        }
+      }
       const revenue = customer.revenue + event.revenue;
       if (!Number.isSafeInteger(revenue)) {
         throw new RangeError('Customer revenue exceeds the safe integer range.');
       }
       customer.revenue = revenue;
       customer.nextProductIndex += 1;
+      delete customer.activeService;
       continue;
     }
     if (event.type === 'customer.completed') {
@@ -406,6 +501,30 @@ const assertBusinessHistory = (
       finalCustomer.revenue !== customer.revenue
     ) {
       throw new RangeError('Active customers do not reconcile with their ledger.');
+    }
+    const isService =
+      finalCustomer.stage.type === 'pump-service' ||
+      finalCustomer.stage.type === 'checkout-service';
+    if (isService) {
+      const activeService = customer.activeService;
+      const expectedRemaining =
+        activeService === undefined
+          ? 0
+          : activeService.performance.totalClockUnits -
+            (state.absoluteClockUnit - activeService.startedAtClockUnit + 1);
+      if (
+        finalCustomer.stage.performance.employeeId !==
+          activeService?.performance.employeeId ||
+        JSON.stringify(finalCustomer.stage.performance) !==
+          JSON.stringify(activeService.performance) ||
+        finalCustomer.stage.unitPrice !== activeService.unitPrice ||
+        finalCustomer.stage.remainingClockUnits !== expectedRemaining ||
+        expectedRemaining < 1
+      ) {
+        throw new RangeError('Active service does not reconcile with its start event.');
+      }
+    } else if (customer.activeService !== undefined) {
+      throw new RangeError('Queued customer retains an active service attribution.');
     }
   }
 };

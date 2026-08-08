@@ -7,7 +7,7 @@ import {
   runClockReplay,
   runScenarioReplay,
   type ClockReplayV1,
-  type ScenarioReplayV4,
+  type ScenarioReplayV5,
 } from '../scenarios/greatPlains';
 import { SEEDED_RANDOM_ALGORITHM, SEEDED_RANDOM_VERSION } from './random';
 
@@ -32,12 +32,12 @@ const replayFixture = (): ClockReplayV1 => ({
   targetNightCount: 3,
 });
 
-const scenarioReplayFixture = (): ScenarioReplayV4 => ({
+const scenarioReplayFixture = (): ScenarioReplayV5 => ({
   commands: replayFixture().commands,
   gridDefinitionId: 'great-plains-station-grid',
   gridDefinitionVersion: 1,
   replayKind: 'scenario',
-  replayVersion: 4,
+  replayVersion: 5,
   rng: {
     algorithm: SEEDED_RANDOM_ALGORITHM,
     seed: 1987,
@@ -102,6 +102,48 @@ describe('clock commands and replay', () => {
     expect(first.consumedCommandIds).toEqual(['start-clock', 'speed-up']);
     expect(first.unconsumedCommandIds).toEqual([]);
     expect(first.stopReason).toBe('tick-limit-reached');
+  });
+
+  it('replays staffed service errors with identical RNG consumption and facts', () => {
+    const replay: ScenarioReplayV5 = {
+      ...scenarioReplayFixture(),
+      commands: [
+        {
+          atTick: 0,
+          command: {
+            employeeId: 'employee-bo',
+            jobId: 'staff-pumps',
+            type: 'job.assign',
+          },
+          id: 'replay-staff-pumps',
+          sequence: 0,
+        },
+        {
+          atTick: 0,
+          command: { mode: 'normal', type: 'time-mode.set' },
+          id: 'replay-start-clock',
+          sequence: 1,
+        },
+      ],
+      rng: { ...scenarioReplayFixture().rng, seed: 1 },
+      stopAfterTick: 210,
+    };
+    const first = runScenarioReplay(replay);
+    const repeated = runScenarioReplay(replay);
+    const service = first.eventLedger.find((event) => event.type === 'service.started');
+
+    expect(repeated).toEqual(first);
+    expect(first.finalRng.drawCount).toBe(1);
+    expect(service).toMatchObject({
+      performance: {
+        employeeId: 'employee-bo',
+        errorOccurred: true,
+        errorReworkClockUnits: 40,
+        errorRoll: 61,
+        rngDrawCount: 1,
+      },
+      type: 'service.started',
+    });
   });
 
   it('replays job assignment through travel, work, and completion', () => {
@@ -192,7 +234,7 @@ describe('clock commands and replay', () => {
       const invalid = {
         ...scenarioReplayFixture(),
         ...override,
-      } as unknown as ScenarioReplayV4;
+      } as unknown as ScenarioReplayV5;
       expect(() => runScenarioReplay(invalid)).toThrow(message);
     },
   );

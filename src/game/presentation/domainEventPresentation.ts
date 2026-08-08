@@ -96,6 +96,16 @@ export const presentDomainEvent = (event: DomainEvent): DomainEventPresentation 
       return { message: 'Station work completed.', tone: 'positive' };
     case 'customer.arrived':
       return { message: 'A routine customer joined the pump queue.', tone: 'neutral' };
+    case 'service.started':
+      return {
+        message: `${event.performance.employeeId} started ${event.product} service at skill ${String(event.performance.skillLevel)}/5 and fatigue ${String(event.performance.fatigue)} (${String(event.performance.totalClockUnits)} units${event.performance.errorOccurred ? `, rework +${String(event.performance.errorReworkClockUnits)}` : ''}).`,
+        tone: event.performance.errorOccurred ? 'warning' : 'neutral',
+      };
+    case 'service.interrupted':
+      return {
+        message: `${event.employeeId} stopped ${event.product} service with ${String(event.remainingClockUnits)} units remaining; the customer rejoined the queue.`,
+        tone: 'warning',
+      };
     case 'sale.completed':
       return {
         message: `${String(event.soldUnits)} ${event.product} sold for $${String(event.revenue)}.`,

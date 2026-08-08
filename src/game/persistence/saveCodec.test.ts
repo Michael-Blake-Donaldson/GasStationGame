@@ -18,6 +18,7 @@ import {
 } from '../serialization/canonicalJson';
 import type { GameSaveSnapshot, SaveIssueCode } from './saveCodec';
 import initialSaveFixture from './fixtures/save-v1-initial.json?raw';
+import initialSaveV2Fixture from './fixtures/save-v2-initial.json?raw';
 
 const advanceSimulationByClockUnits = (
   state: SimulationState,
@@ -71,6 +72,34 @@ const mutateSave = (
   return stringifyCanonicalJson(document);
 };
 
+const downgradeCurrentSaveToV2 = (serialized: string): string =>
+  mutateSave(serialized, (document) => {
+    document.schemaVersion = 2;
+    const content = asRecord(document.content, 'content');
+    content.scenarioVersion = 4;
+    const station = asRecord(document.station, 'station');
+    station.version = 6;
+    station.scenarioVersion = 4;
+    const business = asRecord(station.business, 'business');
+    delete business.performanceBaselineReason;
+    delete business.performanceStartsAtClockUnit;
+    for (const customer of business.activeCustomers as Record<string, unknown>[]) {
+      delete asRecord(customer.stage, 'customer stage').performance;
+    }
+    for (const employee of station.employees as Record<string, unknown>[]) {
+      delete employee.skills;
+    }
+    const ledger = (station.eventLedger as Record<string, unknown>[])
+      .filter((event) => event.type !== 'service.started')
+      .map((event, sequence) => {
+        event.sequence = sequence;
+        if (event.type === 'simulation.started') event.scenarioVersion = 4;
+        return event;
+      });
+    station.eventLedger = ledger;
+    station.nextEventSequence = ledger.length;
+  });
+
 const expectFailureCode = (serialized: string, code: SaveIssueCode): void => {
   const loaded = decodeGameSave(serialized);
   expect(loaded.ok).toBe(false);
@@ -112,13 +141,16 @@ const staffedBusinessState = (clockUnits: number): SimulationState => {
 };
 
 describe('versioned game save codec', () => {
-  it('loads the frozen v1 fixture and writes current v2 saves', () => {
+  it('loads the frozen v1 fixture and writes current v3 saves', () => {
     const serialized = encodeGameSave(snapshotFor(createInitialState(), 0, 0));
     expect(JSON.parse(serialized)).toMatchObject({
-      schemaVersion: 2,
-      station: { version: 6 },
+      schemaVersion: 3,
+      station: { version: 7 },
     });
     expect(expectSuccessfulLoad(initialSaveFixture).simulation).toEqual(
+      createInitialState(),
+    );
+    expect(expectSuccessfulLoad(initialSaveV2Fixture).simulation).toEqual(
       createInitialState(),
     );
     expect(expectSuccessfulLoad(serialized).simulation).toEqual(createInitialState());
@@ -185,7 +217,7 @@ describe('versioned game save codec', () => {
       },
       nextEventSequence: 1,
       resources: createInitialState().resources,
-      scenarioVersion: 4,
+      scenarioVersion: 5,
     });
     expect(migrated.simulation.eventLedger).toHaveLength(1);
   });
@@ -276,6 +308,49 @@ describe('versioned game save codec', () => {
     );
     expect(loadedNext).toEqual(originalNext);
     expect(hashSimulationState(loadedNext)).toBe(hashSimulationState(originalNext));
+  });
+
+  it('migrates a v2 mid-service save to authored skills and a fresh service baseline', () => {
+    const midService = staffedBusinessState(61 * CLOCK_UNITS_PER_MINUTE);
+    expect(midService.business.activeCustomers[0]?.stage.type).toBe('pump-service');
+    const loaded = expectSuccessfulLoad(
+      downgradeCurrentSaveToV2(encodeGameSave(snapshotFor(midService, 2, 10))),
+    );
+
+    expect(loaded.simulation.scenarioVersion).toBe(5);
+    expect(loaded.simulation.business).toMatchObject({
+      performanceBaselineReason: 'legacy-save-migration',
+      performanceStartsAtClockUnit: midService.absoluteClockUnit + 1,
+    });
+    expect(loaded.simulation.business.activeCustomers[0]?.stage.type).toBe(
+      'pump-queue',
+    );
+    expect(
+      loaded.simulation.employees.find(({ id }) => id === 'employee-bo')?.skills,
+    ).toEqual([
+      { id: 'checkout', level: 1 },
+      { id: 'pumps', level: 4 },
+    ]);
+
+    const resumed = advanceSimulationByClockUnits(loaded.simulation, 1);
+    expect(resumed.eventLedger.at(-1)).toMatchObject({
+      performance: { employeeId: 'employee-bo', skillLevel: 4 },
+      type: 'service.started',
+    });
+  });
+
+  it('rejects forged service modifier facts even with a refreshed checksum', () => {
+    const midService = staffedBusinessState(61 * CLOCK_UNITS_PER_MINUTE);
+    const forged = mutateSave(encodeGameSave(snapshotFor(midService)), (document) => {
+      const station = asRecord(document.station, 'station');
+      const service = (station.eventLedger as Record<string, unknown>[]).find(
+        (event) => event.type === 'service.started',
+      );
+      if (service === undefined) throw new Error('Service event is missing.');
+      const performance = asRecord(service.performance, 'service performance');
+      performance.skillLevel = 5;
+    });
+    expectFailureCode(forged, 'semantic-invariant-failed');
   });
 
   it('round-trips inventory purchases and completed customer sales', () => {
@@ -425,7 +500,7 @@ describe('versioned game save codec', () => {
       mutateSave(
         valid,
         (document) => {
-          document.schemaVersion = 3;
+          document.schemaVersion = 4;
         },
         false,
       ),

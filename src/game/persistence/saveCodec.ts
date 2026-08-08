@@ -24,10 +24,12 @@ import {
   campaignStateV1Schema,
   saveDocumentV1Schema,
   saveDocumentV2Schema,
-  savePayloadV2Schema,
+  saveDocumentV3Schema,
+  savePayloadV3Schema,
   type SaveDocumentV1,
   type SaveDocumentV2,
-  type SavePayloadV2,
+  type SaveDocumentV3,
+  type SavePayloadV3,
 } from './saveSchema';
 
 export interface GameSaveContext {
@@ -91,7 +93,7 @@ const assertNonNegativeSafeInteger = (value: number, name: string): void => {
 const createPayload = (
   snapshot: GameSaveSnapshot,
   context: GameSaveContext,
-): SavePayloadV2 => {
+): SavePayloadV3 => {
   assertNonNegativeSafeInteger(snapshot.nextCommandSequence, 'nextCommandSequence');
   assertNonNegativeSafeInteger(snapshot.saveSequence, 'saveSequence');
   const campaign = canonicalizeCampaignState(
@@ -124,7 +126,7 @@ const createPayload = (
     settings: { schemaVersion: SAVE_SETTINGS_VERSION },
     station,
   };
-  return savePayloadV2Schema.parse(payload);
+  return savePayloadV3Schema.parse(payload);
 };
 
 export const encodeGameSave = (
@@ -132,26 +134,30 @@ export const encodeGameSave = (
   context: GameSaveContext,
 ): string => {
   const payload = createPayload(snapshot, context);
-  const document: SaveDocumentV2 = {
+  const document: SaveDocumentV3 = {
     ...payload,
     checksum: {
       algorithm: SAVE_CHECKSUM_ALGORITHM,
       value: hashCanonicalJson(payload),
     },
   };
-  return stringifyCanonicalJson(saveDocumentV2Schema.parse(document));
+  return stringifyCanonicalJson(saveDocumentV3Schema.parse(document));
 };
 
 const restoreSimulationState = (
-  station: SaveDocumentV1['station'] | SaveDocumentV2['station'],
+  station:
+    SaveDocumentV1['station'] | SaveDocumentV2['station'] | SaveDocumentV3['station'],
   context: GameSaveContext,
 ): SimulationState => {
   const isLegacyV1 = !('business' in station);
-  const eventLedger: readonly DomainEvent[] = isLegacyV1
+  const isLegacyPerformance = station.version < 7;
+  const eventLedger: readonly DomainEvent[] = isLegacyPerformance
     ? station.eventLedger
         .filter(
           (event) =>
-            event.type !== 'resources.changed' || event.reason !== 'day-hourly-flow',
+            !isLegacyV1 ||
+            event.type !== 'resources.changed' ||
+            event.reason !== 'day-hourly-flow',
         )
         .map((event, sequence): DomainEvent =>
           event.type === 'simulation.started'
@@ -180,10 +186,43 @@ const restoreSimulationState = (
             ? 'scenario-start'
             : 'legacy-save-migration',
         )
-      : station.business,
+      : !('performanceStartsAtClockUnit' in station.business)
+        ? {
+            ...station.business,
+            activeCustomers: station.business.activeCustomers.map((customer) => ({
+              ...customer,
+              stage:
+                customer.stage.type === 'pump-service'
+                  ? { type: 'pump-queue' as const }
+                  : customer.stage.type === 'checkout-service'
+                    ? { type: 'checkout-queue' as const }
+                    : customer.stage,
+            })),
+            performanceBaselineReason:
+              station.absoluteClockUnit === 8 * 60 * CLOCK_UNITS_PER_MINUTE
+                ? ('scenario-start' as const)
+                : ('legacy-save-migration' as const),
+            performanceStartsAtClockUnit:
+              station.absoluteClockUnit === 8 * 60 * CLOCK_UNITS_PER_MINUTE
+                ? station.absoluteClockUnit
+                : station.absoluteClockUnit + 1,
+          }
+        : station.business,
     clockStepRemainderTimeUnits: station.clockStepRemainderTimeUnits,
     completedNights: station.completedNights,
-    employees: station.employees,
+    employees: station.employees.map((employee) => {
+      const authored = context.simulation.scenario.initialEmployeePositions.find(
+        ({ employeeId }) => employeeId === employee.id,
+      );
+      if (authored === undefined) return { ...employee, skills: [] };
+      return {
+        ...employee,
+        skills:
+          'skills' in employee
+            ? employee.skills.map((skill) => ({ ...skill }))
+            : authored.skills.map((skill) => ({ ...skill })),
+      };
+    }),
     eventLedger,
     isSliceComplete: station.isSliceComplete,
     nextEventSequence: isLegacyV1 ? eventLedger.length : station.nextEventSequence,
@@ -198,7 +237,7 @@ const restoreSimulationState = (
       : station.resources,
     rng: station.rng,
     scenarioId: station.scenarioId,
-    scenarioVersion: isLegacyV1
+    scenarioVersion: isLegacyPerformance
       ? context.simulation.scenario.version
       : station.scenarioVersion,
     seed: station.seed,
@@ -220,7 +259,11 @@ const headerFailure = (value: unknown): SaveLoadResult | undefined => {
       'Save format identifier is unsupported.',
     );
   }
-  if (value.schemaVersion !== 1 && value.schemaVersion !== SAVE_SCHEMA_VERSION) {
+  if (
+    value.schemaVersion !== 1 &&
+    value.schemaVersion !== 2 &&
+    value.schemaVersion !== SAVE_SCHEMA_VERSION
+  ) {
     return failure(
       'unsupported-save-version',
       'schemaVersion',
@@ -228,7 +271,8 @@ const headerFailure = (value: unknown): SaveLoadResult | undefined => {
     );
   }
   const station = value.station;
-  const expectedCheckpointVersion = value.schemaVersion === 1 ? 5 : 6;
+  const expectedCheckpointVersion =
+    value.schemaVersion === 1 ? 5 : value.schemaVersion === 2 ? 6 : 7;
   if (isRecord(station) && station.version !== expectedCheckpointVersion) {
     return failure(
       'unsupported-checkpoint-version',
@@ -252,11 +296,16 @@ const headerFailure = (value: unknown): SaveLoadResult | undefined => {
 };
 
 const contentFailure = (
-  document: SaveDocumentV1 | SaveDocumentV2,
+  document: SaveDocumentV1 | SaveDocumentV2 | SaveDocumentV3,
   context: GameSaveContext,
 ): SaveLoadResult | undefined => {
   const scenario = context.simulation.scenario;
-  const expectedScenarioVersion = document.schemaVersion === 1 ? 3 : scenario.version;
+  const expectedScenarioVersion =
+    document.schemaVersion === 1
+      ? 3
+      : document.schemaVersion === 2
+        ? 4
+        : scenario.version;
   if (
     document.content.scenarioId !== scenario.id ||
     document.content.gridDefinitionId !== scenario.stationGridDefinition.id ||
@@ -304,7 +353,9 @@ export const decodeGameSave = (
   const structural =
     isRecord(parsed) && parsed.schemaVersion === 1
       ? saveDocumentV1Schema.safeParse(parsed)
-      : saveDocumentV2Schema.safeParse(parsed);
+      : isRecord(parsed) && parsed.schemaVersion === 2
+        ? saveDocumentV2Schema.safeParse(parsed)
+        : saveDocumentV3Schema.safeParse(parsed);
   if (!structural.success) {
     return {
       issues: structural.error.issues.map((issue) => ({

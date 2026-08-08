@@ -27,15 +27,23 @@ const assertNonNegativeSafeInteger = (value: number, name: string): void => {
   }
 };
 
-const assertFiniteNumber = (value: number, name: string): void => {
-  if (!Number.isFinite(value)) throw new RangeError(`${name} must be finite.`);
-};
-
 const assertEventContentReferences = (
   event: DomainEvent,
   context: SimulationContext,
   employeeIds: ReadonlySet<string>,
 ): void => {
+  if (event.type === 'service.started' || event.type === 'service.interrupted') {
+    const serviceEmployeeId =
+      event.type === 'service.started'
+        ? event.performance.employeeId
+        : event.employeeId;
+    if (!employeeIds.has(serviceEmployeeId)) {
+      throw new RangeError(
+        `Event ${String(event.sequence)} references an unknown service employee.`,
+      );
+    }
+    return;
+  }
   if (
     event.type !== 'job.assigned' &&
     event.type !== 'employee.arrived' &&
@@ -121,8 +129,44 @@ export const assertSimulationState = (
     if (employee.name.trim().length === 0 || employee.role.trim().length === 0) {
       throw new RangeError(`Employee ${employee.id} needs a name and role.`);
     }
-    assertFiniteNumber(employee.fatigue, `employee ${employee.id} fatigue`);
-    assertFiniteNumber(employee.relationship, `employee ${employee.id} relationship`);
+    if (
+      !Number.isSafeInteger(employee.fatigue) ||
+      employee.fatigue < 0 ||
+      employee.fatigue > 100
+    ) {
+      throw new RangeError(
+        `Employee ${employee.id} fatigue must be an integer from 0 to 100.`,
+      );
+    }
+    if (!Number.isSafeInteger(employee.relationship)) {
+      throw new RangeError(
+        `Employee ${employee.id} relationship must be a safe integer.`,
+      );
+    }
+    const expectedSkillIds = context.scenario.business.products;
+    const requiredSkills = new Set([
+      expectedSkillIds.food.serviceSkillId,
+      expectedSkillIds.fuel.serviceSkillId,
+    ]);
+    const actualSkillIds = employee.skills.map(({ id }) => id);
+    if (
+      employee.skills.some(
+        ({ id, level }) =>
+          !requiredSkills.has(id) ||
+          !Number.isSafeInteger(level) ||
+          level < 0 ||
+          level > 5,
+      ) ||
+      new Set(actualSkillIds).size !== actualSkillIds.length ||
+      actualSkillIds.some(
+        (id, index) => index > 0 && id <= (actualSkillIds[index - 1] ?? ''),
+      ) ||
+      [...requiredSkills].some((id) => !actualSkillIds.includes(id))
+    ) {
+      throw new RangeError(
+        `Employee ${employee.id} skills are invalid or noncanonical.`,
+      );
+    }
   }
   const expectedEmployeeIds = [...context.scenario.initialEmployeePositions]
     .map(({ employeeId }) => employeeId)

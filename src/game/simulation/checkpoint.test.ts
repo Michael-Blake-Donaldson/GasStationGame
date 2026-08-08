@@ -18,17 +18,17 @@ const advanceSimulationByClockUnits = (
 ) => advanceByClockUnitsWithContext(state, clockUnits, greatPlainsSimulationContext);
 
 describe('simulation checkpoint hash', () => {
-  it('serializes checkpoint version 5 with exact RNG, station, and workforce state', () => {
+  it('serializes checkpoint version 7 with exact RNG, station, and workforce state', () => {
     const initial = createInitialState();
     const advanced = drawSimulationRandomInteger(initial, 0, 10).state;
     const checkpoint = createSimulationCheckpoint(advanced);
     const restored: unknown = JSON.parse(JSON.stringify(checkpoint));
 
-    expect(SIMULATION_CHECKPOINT_VERSION).toBe(6);
+    expect(SIMULATION_CHECKPOINT_VERSION).toBe(7);
     expect(checkpoint.rng).toEqual(advanced.rng);
     expect(checkpoint).toMatchObject({
       scenarioId: 'great-plains',
-      scenarioVersion: 4,
+      scenarioVersion: 5,
       stationOccupancy: {
         gridDefinitionId: 'great-plains-station-grid',
         gridDefinitionVersion: 1,
@@ -197,6 +197,40 @@ describe('simulation checkpoint hash', () => {
     expect(stateResourceEvent.changes[0]).not.toEqual(
       checkpointResourceEvent.changes[0],
     );
+  });
+
+  it('detaches nested service performance in the ledger and active customer stage', () => {
+    let state = createInitialState(1);
+    state = dispatchSimulationCommand(state, {
+      atTick: 0,
+      command: { employeeId: 'employee-bo', jobId: 'staff-pumps', type: 'job.assign' },
+      id: 'checkpoint-staff-pumps',
+      sequence: 0,
+    }).state;
+    state = advanceSimulationByClockUnits(state, 61 * CLOCK_UNITS_PER_MINUTE);
+    const checkpoint = createSimulationCheckpoint(state);
+    const checkpointEvent = checkpoint.eventLedger.find(
+      (event) => event.type === 'service.started',
+    );
+    const stateEvent = state.eventLedger.find(
+      (event) => event.type === 'service.started',
+    );
+    const checkpointCustomer = checkpoint.business.activeCustomers[0];
+    const stateCustomer = state.business.activeCustomers[0];
+    if (
+      checkpointEvent?.type !== 'service.started' ||
+      stateEvent?.type !== 'service.started' ||
+      checkpointCustomer?.stage.type !== 'pump-service' ||
+      stateCustomer?.stage.type !== 'pump-service'
+    ) {
+      throw new Error('Expected active attributed service fixtures.');
+    }
+
+    (checkpointEvent.performance as { skillLevel: number }).skillLevel = 0;
+    (checkpointCustomer.stage.performance as { fatigue: number }).fatigue = 100;
+
+    expect(stateEvent.performance.skillLevel).toBe(4);
+    expect(stateCustomer.stage.performance.fatigue).toBe(21);
   });
 
   it('rejects malformed persisted RNG state before checkpointing', () => {

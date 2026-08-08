@@ -8,23 +8,36 @@
   "business": {
     "products": {
       "fuel": {
+        "baseErrorChancePermille": 120,
         "baseDemandUnits": 6,
         "defaultUnitPrice": 4,
         "demandStepUnits": 2,
         "demandVariationCount": 4,
+        "errorReworkClockUnits": 40,
         "maximumUnitPrice": 12,
         "serviceClockUnits": 80,
+        "serviceSkillId": "pumps",
         "wholesaleUnitCost": 2
       },
       "food": {
+        "baseErrorChancePermille": 120,
         "baseDemandUnits": 0,
         "defaultUnitPrice": 6,
         "demandStepUnits": 1,
         "demandVariationCount": 3,
+        "errorReworkClockUnits": 40,
         "maximumUnitPrice": 20,
         "serviceClockUnits": 40,
+        "serviceSkillId": "checkout",
         "wholesaleUnitCost": 3
       }
+    },
+    "performanceRules": {
+      "fatigueErrorPenaltyPermillePerTen": 15,
+      "fatigueSpeedPenaltyPermillePerTen": 40,
+      "maximumErrorChancePermille": 500,
+      "skillErrorReductionPermillePerLevel": 20,
+      "skillSpeedReductionPermillePerLevel": 50
     },
     "trafficWindows": [
       { "startMinute": 540, "endMinute": 690, "intervalMinutes": 12 },
@@ -34,10 +47,54 @@
     ]
   },
   "initialEmployeePositions": [
-    { "employeeId": "employee-ada", "position": { "x": 10, "z": 18 } },
-    { "employeeId": "employee-bo", "position": { "x": 12, "z": 9 } },
-    { "employeeId": "employee-cora", "position": { "x": 20, "z": 18 } },
-    { "employeeId": "employee-dale", "position": { "x": 5, "z": 10 } }
+    {
+      "employeeId": "employee-ada",
+      "name": "Ada",
+      "role": "Checkout",
+      "fatigue": 14,
+      "relationship": 12,
+      "skills": [
+        { "id": "checkout", "level": 4 },
+        { "id": "pumps", "level": 1 }
+      ],
+      "position": { "x": 10, "z": 18 }
+    },
+    {
+      "employeeId": "employee-bo",
+      "name": "Bo",
+      "role": "Pumps",
+      "fatigue": 21,
+      "relationship": 8,
+      "skills": [
+        { "id": "checkout", "level": 1 },
+        { "id": "pumps", "level": 4 }
+      ],
+      "position": { "x": 12, "z": 9 }
+    },
+    {
+      "employeeId": "employee-cora",
+      "name": "Cora",
+      "role": "Garage",
+      "fatigue": 18,
+      "relationship": 17,
+      "skills": [
+        { "id": "checkout", "level": 2 },
+        { "id": "pumps", "level": 2 }
+      ],
+      "position": { "x": 20, "z": 18 }
+    },
+    {
+      "employeeId": "employee-dale",
+      "name": "Dale",
+      "role": "Security",
+      "fatigue": 26,
+      "relationship": 4,
+      "skills": [
+        { "id": "checkout", "level": 1 },
+        { "id": "pumps", "level": 1 }
+      ],
+      "position": { "x": 5, "z": 10 }
+    }
   ],
   "workTargets": [
     {
