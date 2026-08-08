@@ -24,6 +24,7 @@ import {
   type StationOccupancyState,
 } from './grid';
 import { findJobRoute, MOVEMENT_CLOCK_UNITS_PER_CELL } from './jobs';
+import { evaluateRequiredStationAccess } from './layoutRoutes';
 import type { JobDefinition, SimulationContext } from './scenario';
 import type {
   DomainEvent,
@@ -332,6 +333,9 @@ const assertConstructionHistory = (
       throw new RangeError('Construction event placement facts are invalid.');
     }
     occupancy = appendOccupant(occupancy, event.occupant);
+    if (evaluateRequiredStationAccess(context.scenario, occupancy, []).length > 0) {
+      throw new RangeError('Construction event disconnects required work areas.');
+    }
     nextConstructionSequence += 1;
   }
 
@@ -762,6 +766,7 @@ const assertJobHistory = (context: SimulationContext, state: SimulationState): v
       const constructionCells = new Set(
         event.cells.map(({ x, z }) => `${String(x)},${String(z)}`),
       );
+      const workforcePositions: { id: string; position: GridCoordinate }[] = [];
       for (const employee of state.employees) {
         const assignment = activeByEmployee.get(employee.id);
         const elapsed =
@@ -795,8 +800,19 @@ const assertJobHistory = (context: SimulationContext, state: SimulationState): v
         ) {
           throw new RangeError('Construction event obstructs active workforce state.');
         }
+        workforcePositions.push({ id: employee.id, position: currentPosition });
       }
-      occupancy = appendOccupant(occupancy, event.occupant);
+      const nextOccupancy = appendOccupant(occupancy, event.occupant);
+      if (
+        evaluateRequiredStationAccess(
+          context.scenario,
+          nextOccupancy,
+          workforcePositions,
+        ).length > 0
+      ) {
+        throw new RangeError('Construction event strands required workforce access.');
+      }
+      occupancy = nextOccupancy;
     } else if (event.type === 'job.assigned') {
       const job = context.scenario.jobs.find(({ id }) => id === event.jobId);
       const startPosition = positions.get(event.employeeId);

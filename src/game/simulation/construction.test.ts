@@ -173,6 +173,59 @@ describe('construction rules', () => {
     });
   });
 
+  it('keeps multiple-cell work targets available until their final access closes', () => {
+    const onePumpCellBlocked = evaluate(flexibleRequest('wall', 9, 8));
+    expect(onePumpCellBlocked.ok).toBe(true);
+
+    const checkoutBlocked = evaluate(flexibleRequest('wall', 10, 17));
+    expect(checkoutBlocked.ok).toBe(false);
+    if (checkoutBlocked.ok) return;
+    expect(checkoutBlocked.issues).toContainEqual({
+      anchorCells: [],
+      anchorTargetId: 'checkout-counter',
+      cells: [{ x: 10, z: 17 }],
+      conflictingOccupantIds: ['built-wall-0'],
+      reason: 'required-interaction-blocked',
+      workTargetIds: ['checkout-counter'],
+    });
+  });
+
+  it('rejects the final wall that would isolate a current employee', () => {
+    const initial = createInitialState();
+    const state = {
+      ...initial,
+      stationOccupancy: {
+        ...initial.stationOccupancy,
+        occupants: [
+          ...initial.stationOccupancy.occupants,
+          ...[
+            [19, 18],
+            [20, 19],
+            [21, 18],
+          ].map(([x, z], index) => ({
+            footprint: { height: 1, width: 1 },
+            id: `built-wall-${String(index)}`,
+            origin: { x: x ?? 0, z: z ?? 0 },
+            placement: 'flexible' as const,
+            rotation: 0 as const,
+            structureId: 'wall',
+          })),
+        ].sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0)),
+      },
+      nextConstructionSequence: 3,
+    };
+    const result = evaluate(flexibleRequest('wall', 20, 17), state);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.issues).toContainEqual({
+      anchorCells: [{ x: 10, z: 17 }],
+      anchorTargetId: 'checkout-counter',
+      cells: [{ x: 20, z: 18 }],
+      employeeIds: ['employee-cora'],
+      reason: 'required-route-unreachable',
+    });
+  });
+
   it('reports grid, crew, route, phase, sequence, and resource blockers together', () => {
     const initial = createInitialState();
     const state = {

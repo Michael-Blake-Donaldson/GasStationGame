@@ -11,6 +11,7 @@ import {
 import { findStationPath } from './pathfinding';
 import { assertBusinessDefinition } from './business';
 import { assertConstructionDefinitions } from './construction';
+import { assertRequiredStationAccessDefinition } from './layoutRoutes';
 import type {
   JobDefinition,
   ScenarioDefinition,
@@ -234,6 +235,7 @@ export const assertScenarioDefinition = (scenario: ScenarioDefinition): void => 
       throw new RangeError(`Job ${job.id} references an unknown work target.`);
     }
   }
+  assertRequiredStationAccessDefinition(scenario);
 };
 
 export const assertWorkforceSnapshot = (employees: readonly Employee[]): void => {

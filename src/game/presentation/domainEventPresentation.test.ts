@@ -50,6 +50,20 @@ describe('domain event presentation', () => {
         status: 'rejected',
       }),
     ).toEqual({ message: 'Command rejected: invalid payload.', tone: 'warning' });
+    expect(
+      presentCommandReceipt({
+        atTick: 0,
+        changed: false,
+        commandId: 'stranded-layout',
+        commandSequence: 1,
+        emittedEventSequences: [],
+        reason: 'required-route-unreachable',
+        status: 'rejected',
+      }),
+    ).toEqual({
+      message: 'Construction rejected: the layout would strand required access.',
+      tone: 'warning',
+    });
   });
 
   it('presents job lifecycle facts without storing player-facing copy', () => {

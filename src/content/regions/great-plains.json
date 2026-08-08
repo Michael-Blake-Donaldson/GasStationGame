@@ -125,6 +125,15 @@
       "cost": { "cash": 0, "scrap": 2 }
     }
   ],
+  "constructionAccess": {
+    "anchorWorkTargetId": "checkout-counter",
+    "requiredWorkTargetIds": [
+      "beacon-watch",
+      "checkout-counter",
+      "garage-inspection",
+      "west-pump-service"
+    ]
+  },
   "initialEmployeePositions": [
     {
       "employeeId": "employee-ada",

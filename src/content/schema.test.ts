@@ -27,6 +27,15 @@ describe('region content schema', () => {
       'turret',
       'wall',
     ]);
+    expect(greatPlainsRegion.constructionAccess).toEqual({
+      anchorWorkTargetId: 'checkout-counter',
+      requiredWorkTargetIds: [
+        'beacon-watch',
+        'checkout-counter',
+        'garage-inspection',
+        'west-pump-service',
+      ],
+    });
     expect(() =>
       assertStationGridDefinition(greatPlainsRegion.stationGrid),
     ).not.toThrow();
@@ -75,6 +84,27 @@ describe('region content schema', () => {
             ...greatPlainsRegion.business.performanceRules,
             maximumErrorChancePermille: 1001,
           },
+        },
+      }),
+    ).toThrow();
+  });
+
+  it('rejects structurally malformed construction access content', () => {
+    expect(() =>
+      regionSchema.parse({
+        ...greatPlainsRegion,
+        constructionAccess: {
+          ...greatPlainsRegion.constructionAccess,
+          requiredWorkTargetIds: [],
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      regionSchema.parse({
+        ...greatPlainsRegion,
+        constructionAccess: {
+          ...greatPlainsRegion.constructionAccess,
+          anchorWorkTargetId: 'Checkout Counter',
         },
       }),
     ).toThrow();

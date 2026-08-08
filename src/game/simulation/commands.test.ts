@@ -355,6 +355,46 @@ describe('simulation command dispatch', () => {
     });
   });
 
+  it('rejects the final enclosure segment without spending or mutating state', () => {
+    let state = createInitialState();
+    for (const [sequence, origin] of [
+      { x: 19, z: 18 },
+      { x: 20, z: 19 },
+      { x: 21, z: 18 },
+    ].entries()) {
+      const result = dispatchSimulationCommand(state, {
+        atTick: 0,
+        command: {
+          blueprintId: 'wall',
+          placement: { kind: 'flexible', origin, rotation: 0 },
+          type: 'construction.place',
+        },
+        id: `enclosure-wall-${String(sequence)}`,
+        sequence,
+      });
+      expect(result.receipt.status).toBe('accepted');
+      state = result.state;
+    }
+    const rejected = dispatchSimulationCommand(state, {
+      atTick: 0,
+      command: {
+        blueprintId: 'wall',
+        placement: { kind: 'flexible', origin: { x: 20, z: 17 }, rotation: 0 },
+        type: 'construction.place',
+      },
+      id: 'enclosure-final-wall',
+      sequence: 3,
+    });
+
+    expect(rejected.state).toBe(state);
+    expect(rejected.receipt).toMatchObject({
+      changed: false,
+      emittedEventSequences: [],
+      reason: 'required-route-unreachable',
+      status: 'rejected',
+    });
+  });
+
   it('rejects construction outside day operations and malformed client geometry', () => {
     const night = runningNight();
     const closed = dispatchSimulationCommand(night, {

@@ -5,6 +5,7 @@ import {
   decodeGameSave,
   dispatchSimulationCommand,
   encodeGameSave,
+  greatPlainsSaveContext,
   greatPlainsSimulationContext,
   hashSimulationState,
 } from '../scenarios/greatPlains';
@@ -16,10 +17,15 @@ import {
   hashCanonicalJson,
   stringifyCanonicalJson,
 } from '../serialization/canonicalJson';
-import type { GameSaveSnapshot, SaveIssueCode } from './saveCodec';
+import {
+  decodeGameSave as decodeGameSaveWithContext,
+  type GameSaveSnapshot,
+  type SaveIssueCode,
+} from './saveCodec';
 import initialSaveFixture from './fixtures/save-v1-initial.json?raw';
 import initialSaveV2Fixture from './fixtures/save-v2-initial.json?raw';
 import initialSaveV3Fixture from './fixtures/save-v3-initial.json?raw';
+import initialSaveV4Fixture from './fixtures/save-v4-initial.json?raw';
 
 const advanceSimulationByClockUnits = (
   state: SimulationState,
@@ -143,7 +149,7 @@ const staffedBusinessState = (clockUnits: number): SimulationState => {
 };
 
 describe('versioned game save codec', () => {
-  it('loads the frozen v1-v3 fixtures and writes current v4 saves', () => {
+  it('loads the frozen v1-v4 fixtures and writes current v4 saves', () => {
     const serialized = encodeGameSave(snapshotFor(createInitialState(), 0, 0));
     expect(JSON.parse(serialized)).toMatchObject({
       schemaVersion: 4,
@@ -156,6 +162,9 @@ describe('versioned game save codec', () => {
       createInitialState(),
     );
     expect(expectSuccessfulLoad(initialSaveV3Fixture).simulation).toEqual(
+      createInitialState(),
+    );
+    expect(expectSuccessfulLoad(initialSaveV4Fixture).simulation).toEqual(
       createInitialState(),
     );
     expect(expectSuccessfulLoad(serialized).simulation).toEqual(createInitialState());
@@ -222,7 +231,7 @@ describe('versioned game save codec', () => {
       },
       nextEventSequence: 1,
       resources: createInitialState().resources,
-      scenarioVersion: 6,
+      scenarioVersion: 7,
     });
     expect(migrated.simulation.eventLedger).toHaveLength(1);
   });
@@ -322,7 +331,7 @@ describe('versioned game save codec', () => {
       downgradeCurrentSaveToV2(encodeGameSave(snapshotFor(midService, 2, 10))),
     );
 
-    expect(loaded.simulation.scenarioVersion).toBe(6);
+    expect(loaded.simulation.scenarioVersion).toBe(7);
     expect(loaded.simulation.business).toMatchObject({
       performanceBaselineReason: 'legacy-save-migration',
       performanceStartsAtClockUnit: midService.absoluteClockUnit + 1,
@@ -356,6 +365,98 @@ describe('versioned game save codec', () => {
       performance.skillLevel = 5;
     });
     expectFailureCode(forged, 'semantic-invariant-failed');
+  });
+
+  it('rejects a legacy v4 layout that cannot preserve required access', () => {
+    const stranded = mutateSave(initialSaveV4Fixture, (document) => {
+      const station = asRecord(document.station, 'station');
+      const occupancy = asRecord(station.stationOccupancy, 'station occupancy');
+      const occupants = occupancy.occupants as Record<string, unknown>[];
+      occupants.push({
+        footprint: { height: 1, width: 1 },
+        id: 'built-wall-0',
+        origin: { x: 10, z: 17 },
+        placement: 'flexible',
+        rotation: 0,
+        structureId: 'wall',
+      });
+      occupants.sort(({ id: left }, { id: right }) =>
+        String(left) < String(right) ? -1 : String(left) > String(right) ? 1 : 0,
+      );
+    });
+
+    expectFailureCode(stranded, 'legacy-layout-strands-required-route');
+  });
+
+  it('returns a semantic failure for malformed legacy occupancy instead of throwing', () => {
+    const overlapping = mutateSave(initialSaveV4Fixture, (document) => {
+      const station = asRecord(document.station, 'station');
+      const occupancy = asRecord(station.stationOccupancy, 'station occupancy');
+      const occupants = occupancy.occupants as Record<string, unknown>[];
+      occupants.push({
+        footprint: { height: 1, width: 1 },
+        id: 'built-wall-0',
+        origin: { x: 9, z: 6 },
+        placement: 'flexible',
+        rotation: 0,
+        structureId: 'wall',
+      });
+      occupants.sort(({ id: left }, { id: right }) =>
+        String(left) < String(right) ? -1 : String(left) > String(right) ? 1 : 0,
+      );
+    });
+
+    expectFailureCode(overlapping, 'semantic-invariant-failed');
+  });
+
+  it('rejects the scenario-v6 migration edge when the target is newer than v7', () => {
+    const futureContext = {
+      ...greatPlainsSaveContext,
+      simulation: {
+        scenario: { ...greatPlainsSaveContext.simulation.scenario, version: 8 },
+      },
+    };
+    const loaded = decodeGameSaveWithContext(initialSaveV4Fixture, futureContext);
+
+    expect(loaded.ok).toBe(false);
+    if (loaded.ok) throw new Error('Expected future migration to fail.');
+    expect(loaded.issues.map(({ code }) => code)).toContain(
+      'unsupported-content-version',
+    );
+  });
+
+  it('migrates safe scenario-v6 construction history without changing its facts', () => {
+    const built = dispatchSimulationCommand(createInitialState(), {
+      atTick: 0,
+      command: {
+        blueprintId: 'wall',
+        placement: { kind: 'flexible', origin: { x: 0, z: 4 }, rotation: 0 },
+        type: 'construction.place',
+      },
+      id: 'safe-v6-construction',
+      sequence: 0,
+    }).state;
+    const legacy = mutateSave(encodeGameSave(snapshotFor(built)), (document) => {
+      asRecord(document.content, 'content').scenarioVersion = 6;
+      const station = asRecord(document.station, 'station');
+      station.scenarioVersion = 6;
+      const started = (station.eventLedger as Record<string, unknown>[]).find(
+        ({ type }) => type === 'simulation.started',
+      );
+      if (started === undefined) throw new Error('Simulation start event is missing.');
+      started.scenarioVersion = 6;
+    });
+    const loaded = expectSuccessfulLoad(legacy);
+
+    expect(loaded.simulation).toMatchObject({
+      nextConstructionSequence: 1,
+      scenarioId: 'great-plains',
+      scenarioVersion: 7,
+    });
+    expect(loaded.simulation.stationOccupancy).toEqual(built.stationOccupancy);
+    expect(
+      loaded.simulation.eventLedger.find(({ type }) => type === 'construction.placed'),
+    ).toEqual(built.eventLedger.find(({ type }) => type === 'construction.placed'));
   });
 
   it('round-trips inventory purchases and completed customer sales', () => {
@@ -529,6 +630,45 @@ describe('versioned game save codec', () => {
       );
       if (occupant === undefined) throw new Error('Constructed occupant is missing.');
       occupant.origin = { ...routeCell };
+    });
+
+    expectFailureCode(forged, 'semantic-invariant-failed');
+  });
+
+  it('rejects forged construction history that strands future workforce access', () => {
+    let state = createInitialState();
+    for (const [sequence, origin] of [
+      { x: 19, z: 18 },
+      { x: 20, z: 19 },
+      { x: 21, z: 18 },
+      { x: 0, z: 4 },
+    ].entries()) {
+      state = dispatchSimulationCommand(state, {
+        atTick: 0,
+        command: {
+          blueprintId: 'wall',
+          placement: { kind: 'flexible', origin, rotation: 0 },
+          type: 'construction.place',
+        },
+        id: `forged-access-source-${String(sequence)}`,
+        sequence,
+      }).state;
+    }
+    const forged = mutateSave(encodeGameSave(snapshotFor(state)), (document) => {
+      const station = asRecord(document.station, 'station');
+      const events = station.eventLedger as Record<string, unknown>[];
+      const event = [...events]
+        .reverse()
+        .find(({ type }) => type === 'construction.placed');
+      if (event === undefined) throw new Error('Construction event is missing.');
+      event.cells = [{ x: 20, z: 17 }];
+      asRecord(event.occupant, 'construction occupant').origin = { x: 20, z: 17 };
+      const occupancy = asRecord(station.stationOccupancy, 'station occupancy');
+      const occupant = (occupancy.occupants as Record<string, unknown>[]).find(
+        ({ id }) => id === 'built-wall-3',
+      );
+      if (occupant === undefined) throw new Error('Constructed occupant is missing.');
+      occupant.origin = { x: 20, z: 17 };
     });
 
     expectFailureCode(forged, 'semantic-invariant-failed');

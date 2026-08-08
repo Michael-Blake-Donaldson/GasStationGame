@@ -28,7 +28,7 @@ describe('simulation checkpoint hash', () => {
     expect(checkpoint.rng).toEqual(advanced.rng);
     expect(checkpoint).toMatchObject({
       scenarioId: 'great-plains',
-      scenarioVersion: 6,
+      scenarioVersion: 7,
       stationOccupancy: {
         gridDefinitionId: 'great-plains-station-grid',
         gridDefinitionVersion: 1,

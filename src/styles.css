@@ -1219,6 +1219,16 @@ button:focus-visible,
   padding-left: 16px;
 }
 
+.construction-provisional-note {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border: 1px dashed rgba(211, 159, 77, 0.5);
+  color: var(--muted);
+  background: rgba(211, 159, 77, 0.07);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
 .construction-confirm {
   width: 100%;
   min-height: 40px;

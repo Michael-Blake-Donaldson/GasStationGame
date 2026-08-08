@@ -11,6 +11,7 @@ import { assertSimulationState } from '../simulation/validation';
 import { createInitialBusinessState } from '../simulation/business';
 import { createInitialState } from '../simulation/createInitialState';
 import { CLOCK_UNITS_PER_MINUTE } from '../simulation/clock';
+import { evaluateRequiredStationAccess } from '../simulation/layoutRoutes';
 import {
   hashCanonicalJson,
   stringifyCanonicalJson,
@@ -52,6 +53,7 @@ export type SaveIssueCode =
   | 'invalid-campaign'
   | 'invalid-json'
   | 'invalid-save-structure'
+  | 'legacy-layout-strands-required-route'
   | 'semantic-invariant-failed'
   | 'unsupported-checkpoint-version'
   | 'unsupported-content-version'
@@ -156,24 +158,27 @@ const restoreSimulationState = (
 ): SimulationState => {
   const isLegacyV1 = !('business' in station);
   const isLegacyConstruction = station.version < 8;
-  const eventLedger: readonly DomainEvent[] = isLegacyConstruction
-    ? station.eventLedger
-        .filter(
-          (event) =>
-            !isLegacyV1 ||
-            event.type !== 'resources.changed' ||
-            event.reason !== 'day-hourly-flow',
-        )
-        .map((event, sequence): DomainEvent =>
-          event.type === 'simulation.started'
-            ? {
-                ...event,
-                scenarioVersion: context.simulation.scenario.version,
-                sequence,
-              }
-            : { ...event, sequence },
-        )
-    : station.eventLedger;
+  const isLegacyScenario =
+    station.scenarioVersion < context.simulation.scenario.version;
+  const eventLedger: readonly DomainEvent[] =
+    isLegacyConstruction || isLegacyScenario
+      ? station.eventLedger
+          .filter(
+            (event) =>
+              !isLegacyV1 ||
+              event.type !== 'resources.changed' ||
+              event.reason !== 'day-hourly-flow',
+          )
+          .map((event, sequence): DomainEvent =>
+            event.type === 'simulation.started'
+              ? {
+                  ...event,
+                  scenarioVersion: context.simulation.scenario.version,
+                  sequence,
+                }
+              : { ...event, sequence },
+          )
+      : station.eventLedger;
   const initialResources = createInitialState(
     context.simulation.scenario,
     station.seed,
@@ -244,7 +249,7 @@ const restoreSimulationState = (
       : station.resources,
     rng: station.rng,
     scenarioId: station.scenarioId,
-    scenarioVersion: isLegacyConstruction
+    scenarioVersion: isLegacyScenario
       ? context.simulation.scenario.version
       : station.scenarioVersion,
     seed: station.seed,
@@ -314,14 +319,16 @@ const contentFailure = (
   context: GameSaveContext,
 ): SaveLoadResult | undefined => {
   const scenario = context.simulation.scenario;
-  const expectedScenarioVersion =
+  const expectedScenarioVersions: readonly number[] =
     document.schemaVersion === 1
-      ? 3
+      ? [3]
       : document.schemaVersion === 2
-        ? 4
+        ? [4]
         : document.schemaVersion === 3
-          ? 5
-          : scenario.version;
+          ? [5]
+          : scenario.version === 7
+            ? [6, 7]
+            : [scenario.version];
   if (
     document.content.scenarioId !== scenario.id ||
     document.content.gridDefinitionId !== scenario.stationGridDefinition.id ||
@@ -337,9 +344,9 @@ const contentFailure = (
     );
   }
   if (
-    document.content.scenarioVersion !== expectedScenarioVersion ||
+    !expectedScenarioVersions.includes(document.content.scenarioVersion) ||
     document.content.gridDefinitionVersion !== scenario.stationGridDefinition.version ||
-    document.station.scenarioVersion !== expectedScenarioVersion ||
+    document.station.scenarioVersion !== document.content.scenarioVersion ||
     document.station.stationOccupancy.gridDefinitionVersion !==
       scenario.stationGridDefinition.version
   ) {
@@ -406,9 +413,32 @@ export const decodeGameSave = (
     );
   }
 
-  const simulation = restoreSimulationState(document.station, context);
   try {
+    const simulation = restoreSimulationState(document.station, context);
+    if (
+      document.station.scenarioVersion === 6 &&
+      evaluateRequiredStationAccess(
+        context.simulation.scenario,
+        simulation.stationOccupancy,
+        simulation.employees,
+      ).length > 0
+    ) {
+      return failure(
+        'legacy-layout-strands-required-route',
+        'station.stationOccupancy',
+        'Legacy construction blocks a required work route and cannot migrate safely.',
+      );
+    }
     assertSimulationState(context.simulation, simulation);
+    return {
+      campaign: document.campaign,
+      difficulty: document.difficulty,
+      nextCommandSequence: document.session.nextCommandSequence,
+      ok: true,
+      saveSequence: document.metadata.saveSequence,
+      settings: document.settings,
+      simulation,
+    };
   } catch (error) {
     return failure(
       'semantic-invariant-failed',
@@ -416,14 +446,4 @@ export const decodeGameSave = (
       error instanceof Error ? error.message : 'Simulation state is invalid.',
     );
   }
-
-  return {
-    campaign: document.campaign,
-    difficulty: document.difficulty,
-    nextCommandSequence: document.session.nextCommandSequence,
-    ok: true,
-    saveSequence: document.metadata.saveSequence,
-    settings: document.settings,
-    simulation,
-  };
 };

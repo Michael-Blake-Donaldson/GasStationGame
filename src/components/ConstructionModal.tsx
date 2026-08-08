@@ -19,6 +19,13 @@ interface ConstructionModalProps {
 
 const ROTATIONS: readonly QuarterTurn[] = [0, 1, 2, 3];
 
+const readableId = (id: string): string =>
+  id
+    .replace(/^employee-/u, '')
+    .split('-')
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(' ');
+
 const describeIssue = (issue: ConstructionIssue): string => {
   const cells =
     issue.cells.length === 0
@@ -34,6 +41,12 @@ const describeIssue = (issue: ConstructionIssue): string => {
       return `Crew ${issue.employeeIds?.join(', ') ?? 'member'} occupies the footprint${cells}.`;
     case 'active-route-obstructed':
       return `Active route for ${issue.employeeIds?.join(', ') ?? 'crew'} crosses the footprint${cells}.`;
+    case 'required-interaction-blocked':
+      return `Blocks every work cell for ${(issue.workTargetIds ?? ['required target']).map(readableId).join(', ')}${cells}. Leave at least one listed interaction cell open.`;
+    case 'required-route-unreachable':
+      return issue.employeeIds === undefined
+        ? `Disconnects ${(issue.workTargetIds ?? ['required target']).map(readableId).join(', ')} from ${readableId(issue.anchorTargetId ?? 'station-work-network')}${cells}. Required work areas must remain in one walkable network.`
+        : `Strands ${issue.employeeIds.map(readableId).join(', ')} from ${readableId(issue.anchorTargetId ?? 'station-work-network')}${cells}. Keep a four-way walkable route open.`;
     case 'authored-plot-occupied':
       return `Plot ${issue.plotId ?? ''} is already occupied.`;
     case 'authored-plot-reserved':
@@ -251,6 +264,13 @@ export const ConstructionModal = ({
               </ul>
             )}
           </div>
+
+          {blueprint?.id === 'gate' ? (
+            <p className="construction-provisional-note">
+              Provisional gate: staff cannot pass through this footprint until gate
+              controls are implemented. It currently behaves as a solid barrier.
+            </p>
+          ) : null}
 
           <button
             className="primary-action construction-confirm"

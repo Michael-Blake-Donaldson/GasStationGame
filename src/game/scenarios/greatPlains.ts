@@ -41,6 +41,7 @@ export const greatPlainsStationGrid = greatPlainsRegion.stationGrid;
 export const greatPlainsScenario = {
   business: greatPlainsRegion.business,
   construction: greatPlainsRegion.construction,
+  constructionAccess: greatPlainsRegion.constructionAccess,
   id: GREAT_PLAINS_SCENARIO_ID,
   initialEmployeePositions: greatPlainsRegion.initialEmployeePositions,
   jobs: greatPlainsRegion.jobs,

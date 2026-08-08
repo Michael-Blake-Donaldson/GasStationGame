@@ -117,4 +117,95 @@ describe('ConstructionModal', () => {
     expect(place?.disabled).toBe(true);
     act(() => root.unmount());
   });
+
+  it('explains gate passability before gate controls exist', () => {
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <ConstructionModal
+          isOpen
+          isRecoveryReady
+          onClose={vi.fn()}
+          onPlaceConstruction={vi.fn()}
+          simulation={createInitialState()}
+        />,
+      );
+    });
+    const gate = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      ({ textContent }) => textContent.includes('Gate$8'),
+    );
+    act(() => gate?.click());
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+      'staff cannot pass through this footprint',
+    );
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+      'solid barrier',
+    );
+    act(() => root.unmount());
+  });
+
+  it('names the crew member stranded by a placement preview', () => {
+    const initial = createInitialState();
+    const simulation = {
+      ...initial,
+      nextConstructionSequence: 3,
+      stationOccupancy: {
+        ...initial.stationOccupancy,
+        occupants: [
+          ...initial.stationOccupancy.occupants,
+          ...[
+            { x: 19, z: 18 },
+            { x: 20, z: 19 },
+            { x: 21, z: 18 },
+          ].map(({ x, z }, index) => ({
+            footprint: { height: 1, width: 1 },
+            id: `built-wall-${String(index)}`,
+            origin: { x, z },
+            placement: 'flexible' as const,
+            rotation: 0 as const,
+            structureId: 'wall',
+          })),
+        ].sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0)),
+      },
+    };
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <ConstructionModal
+          isOpen
+          isRecoveryReady
+          onClose={vi.fn()}
+          onPlaceConstruction={vi.fn()}
+          simulation={simulation}
+        />,
+      );
+    });
+    const [xInput, zInput] =
+      document.querySelectorAll<HTMLInputElement>('input[type="number"]');
+    if (xInput === undefined || zInput === undefined) {
+      throw new Error('Construction coordinate controls are missing.');
+    }
+    const inputValueDescriptor = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    );
+    if (inputValueDescriptor?.set === undefined) {
+      throw new Error('Input value setter is missing.');
+    }
+    act(() => {
+      inputValueDescriptor.set?.call(xInput, '20');
+      xInput.dispatchEvent(new Event('input', { bubbles: true }));
+      inputValueDescriptor.set?.call(zInput, '17');
+      zInput.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    expect(document.querySelector('[role="status"]')?.textContent).toContain(
+      'Strands Cora from Checkout Counter',
+    );
+    const place = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      ({ textContent }) => textContent.trim() === 'Place Wall',
+    );
+    expect(place?.disabled).toBe(true);
+    act(() => root.unmount());
+  });
 });

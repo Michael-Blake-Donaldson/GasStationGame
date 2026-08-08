@@ -5,6 +5,7 @@ import {
 } from './clock';
 import { assertBusinessState } from './business';
 import { assertWorkforceState } from './jobs';
+import { evaluateRequiredStationAccess } from './layoutRoutes';
 import { assertSeededRandomState } from './random';
 import type { SimulationContext } from './scenario';
 import type { DomainEvent, ResourceKey, SimulationState } from './types';
@@ -193,6 +194,15 @@ export const assertSimulationState = (
 
   assertSeededRandomState(state.rng);
   assertWorkforceState(context, state);
+  if (
+    evaluateRequiredStationAccess(
+      context.scenario,
+      state.stationOccupancy,
+      state.employees,
+    ).length > 0
+  ) {
+    throw new RangeError('Station occupancy does not preserve required access.');
+  }
 
   if (state.eventLedger.length === 0) {
     throw new RangeError('Simulation event ledger cannot be empty.');

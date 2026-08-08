@@ -52,6 +52,11 @@ const constructionDefinitionSchema = z.discriminatedUnion('placement', [
   }),
 ]);
 
+const constructionAccessSchema = z.object({
+  anchorWorkTargetId: technicalIdSchema,
+  requiredWorkTargetIds: z.array(technicalIdSchema).min(1),
+});
+
 export const facilityPlotSchema = gridRectangleSchema.extend({
   id: technicalIdSchema,
   rotation: quarterTurnSchema,
@@ -167,6 +172,7 @@ export const regionSchema = z.object({
   id: technicalIdSchema,
   business: businessDefinitionSchema,
   construction: z.array(constructionDefinitionSchema).min(1),
+  constructionAccess: constructionAccessSchema,
   displayName: z.string().min(1),
   identity: z.array(z.string().min(1)).min(1),
   pressures: z.array(z.string().min(1)).min(1),

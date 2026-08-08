@@ -349,7 +349,8 @@ export const App = () => {
             <h3>Prepare the grounds</h3>
             <p>
               Preview exact cost and occupied cells before placing a facility or
-              flexible structure. Current shells do not yet operate equipment.
+              flexible structure. Placements cannot strand crew or required work areas.
+              Current shells do not yet operate equipment.
             </p>
           </section>
           <section>

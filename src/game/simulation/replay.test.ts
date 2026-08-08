@@ -152,6 +152,51 @@ describe('clock commands and replay', () => {
     expect(event.occupant).toMatchObject({ id: 'built-gate-0', rotation: 1 });
   });
 
+  it('replays required-route rejection without changing construction state', () => {
+    const replay: ScenarioReplayV6 = {
+      ...scenarioReplayFixture(),
+      commands: [
+        ...[
+          { x: 19, z: 18 },
+          { x: 20, z: 19 },
+          { x: 21, z: 18 },
+          { x: 20, z: 17 },
+        ].map((origin, sequence) => ({
+          atTick: 0,
+          command: {
+            blueprintId: 'wall',
+            placement: { kind: 'flexible' as const, origin, rotation: 0 as const },
+            type: 'construction.place' as const,
+          },
+          id: `replay-enclosure-${String(sequence)}`,
+          sequence,
+        })),
+        {
+          atTick: 0,
+          command: { mode: 'normal', type: 'time-mode.set' },
+          id: 'replay-enclosure-clock',
+          sequence: 4,
+        },
+      ],
+      stopAfterTick: 2,
+    };
+    const first = runScenarioReplay(replay);
+    const repeated = runScenarioReplay(replay);
+
+    expect(repeated).toEqual(first);
+    expect(first.receipts[3]).toMatchObject({
+      changed: false,
+      reason: 'required-route-unreachable',
+      status: 'rejected',
+    });
+    expect(first.state.nextConstructionSequence).toBe(3);
+    expect(
+      first.state.stationOccupancy.occupants.filter(({ id }) =>
+        id.startsWith('built-wall-'),
+      ),
+    ).toHaveLength(3);
+  });
+
   it('replays staffed service errors with identical RNG consumption and facts', () => {
     const replay: ScenarioReplayV6 = {
       ...scenarioReplayFixture(),

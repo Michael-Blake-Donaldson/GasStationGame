@@ -94,7 +94,7 @@ Last updated: 2026-08-08
 - **Status:** Open
 - **Symptoms:** GS-022 places, saves, replays, and renders every required Great Plains construction blueprint, but constructed gates, lights, turrets, storage, repair, and generator upgrades do not yet change utilities, defense, inventory capacity, access, or repair behavior. Numeric footprints and cash/scrap costs are provisional because the GDD does not specify them.
 - **Impact:** Players can test placement clarity and opportunity cost, but cannot yet judge final balance or nighttime consequence from construction alone.
-- **Plan:** Validate whole-layout access in GS-023, then connect the same authoritative occupants to power, defense, ammunition, damage, and repair systems in GS-030 through GS-035. Tune provisional values through playtest rather than presenting them as GDD canon.
+- **Plan:** GS-023 now preserves the required employee/work-target network. Connect the same authoritative occupants to power, defense, ammunition, damage, and repair systems in GS-030 through GS-035. Tune provisional values through playtest rather than presenting them as GDD canon.
 
 ### KI-012 — Employee performance is intentionally static and retail-scoped
 
@@ -116,7 +116,7 @@ Establish alert priority, causal event history, camera cues, and failure explana
 
 ### KR-003 — Flexible construction can break navigation and utility connections
 
-GS-022 now blocks occupied/reserved cells, current employee cells, and remaining active routes with deterministic feedback. GS-023 must preserve required whole-layout routes for future assignments, and later power work must validate segmented circuits and explain disconnected placement.
+GS-022 blocks occupied/reserved cells, current employee cells, and remaining active routes. GS-023 also preserves a content-authored work network for every current employee and required interaction area, with deterministic endpoint feedback. Remaining risk is deliberate: gates are solid until controls exist, while customer/vehicle, threat/defender, evacuation, redundant-width, damage, and utility routes arrive with their owning systems. Later power work must validate segmented circuits and explain disconnected placement.
 
 ### KR-004 — Event logs and morning reports can diverge
 

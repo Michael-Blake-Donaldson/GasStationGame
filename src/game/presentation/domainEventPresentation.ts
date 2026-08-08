@@ -158,6 +158,16 @@ export const presentCommandReceipt = (
         message: 'Construction rejected: the footprint blocks active crew movement.',
         tone: 'warning',
       };
+    case 'required-interaction-blocked':
+      return {
+        message: 'Construction rejected: a required work area has no open access cell.',
+        tone: 'warning',
+      };
+    case 'required-route-unreachable':
+      return {
+        message: 'Construction rejected: the layout would strand required access.',
+        tone: 'warning',
+      };
     case 'blueprint-not-found':
       return {
         message: 'Construction rejected: blueprint was not found.',

@@ -8,6 +8,11 @@ import {
   type RectangularFootprint,
   type StationGridDefinition,
 } from './grid';
+import {
+  evaluateRequiredStationAccess,
+  type RequiredAccessIssue,
+  type RequiredAccessIssueReason,
+} from './layoutRoutes';
 import type { SimulationContext } from './scenario';
 import type { SimulationState } from './types';
 
@@ -56,6 +61,7 @@ export type ConstructionPlacementRequest =
 
 export type ConstructionIssueReason =
   | OccupancyIssue['reason']
+  | RequiredAccessIssueReason
   | 'active-route-obstructed'
   | 'blueprint-not-found'
   | 'construction-closed'
@@ -70,10 +76,13 @@ export interface ConstructionIssue {
   readonly cells: readonly GridCoordinate[];
   readonly conflictingOccupantIds?: readonly string[];
   readonly employeeIds?: readonly string[];
+  readonly anchorCells?: readonly GridCoordinate[];
+  readonly anchorTargetId?: string;
   readonly plotId?: string;
   readonly reason: ConstructionIssueReason;
   readonly required?: number;
   readonly available?: number;
+  readonly workTargetIds?: readonly string[];
 }
 
 interface ConstructionEvaluationBase {
@@ -111,8 +120,10 @@ const ISSUE_PRIORITY: Record<ConstructionIssueReason, number> = {
   'cell-occupied': 13,
   'employee-cell-occupied': 14,
   'active-route-obstructed': 15,
-  'insufficient-cash': 16,
-  'insufficient-scrap': 17,
+  'required-interaction-blocked': 16,
+  'required-route-unreachable': 17,
+  'insufficient-cash': 18,
+  'insufficient-scrap': 19,
 };
 
 const compareCells = (left: GridCoordinate, right: GridCoordinate): number =>
@@ -154,6 +165,20 @@ const fromOccupancyIssue = (issue: OccupancyIssue): ConstructionIssue => ({
     : { conflictingOccupantIds: [...issue.conflictingOccupantIds] }),
   ...(issue.plotId === undefined ? {} : { plotId: issue.plotId }),
   reason: issue.reason,
+});
+
+const fromRequiredAccessIssue = (issue: RequiredAccessIssue): ConstructionIssue => ({
+  anchorCells: cloneCells(issue.anchorCells),
+  anchorTargetId: issue.anchorTargetId,
+  cells: cloneCells(issue.cells),
+  ...(issue.conflictingOccupantIds === undefined
+    ? {}
+    : { conflictingOccupantIds: [...issue.conflictingOccupantIds] }),
+  ...(issue.employeeIds === undefined ? {} : { employeeIds: [...issue.employeeIds] }),
+  reason: issue.reason,
+  ...(issue.workTargetIds === undefined
+    ? {}
+    : { workTargetIds: [...issue.workTargetIds] }),
 });
 
 const assertNonNegativeSafeInteger = (value: number, name: string): void => {
@@ -267,6 +292,7 @@ export const evaluateConstructionPlacement = (
   const occupantId = occupantIdFor(blueprint.id, state.nextConstructionSequence);
   let occupant: PlacedOccupant;
   let cells: readonly GridCoordinate[];
+  let geometryValid: boolean;
   if (blueprint.placement === 'authored-plot') {
     const placement = request.placement;
     if (placement.kind !== 'authored-plot') {
@@ -284,6 +310,7 @@ export const evaluateConstructionPlacement = (
       occupant,
     );
     cells = occupancy.cells;
+    geometryValid = occupancy.ok;
     if (!occupancy.ok) issues.push(...occupancy.issues.map(fromOccupancyIssue));
   } else {
     const placement = request.placement;
@@ -304,9 +331,11 @@ export const evaluateConstructionPlacement = (
       occupant,
     );
     cells = occupancy.cells;
+    geometryValid = occupancy.ok;
     if (!occupancy.ok) issues.push(...occupancy.issues.map(fromOccupancyIssue));
     if (!blueprint.allowedRotations.includes(placement.rotation)) {
       issues.push(constructionIssue('rotation-not-allowed', cells));
+      geometryValid = false;
     }
   }
 
@@ -337,6 +366,21 @@ export const evaluateConstructionPlacement = (
         [...activeRouteCells.values()].flat(),
         { employeeIds: [...activeRouteCells.keys()].sort(compareIds) },
       ),
+    );
+  }
+  if (geometryValid && employeeCells.size === 0) {
+    const hypotheticalOccupancy = {
+      ...state.stationOccupancy,
+      occupants: [...state.stationOccupancy.occupants, occupant].sort((left, right) =>
+        compareIds(left.id, right.id),
+      ),
+    };
+    issues.push(
+      ...evaluateRequiredStationAccess(
+        context.scenario,
+        hypotheticalOccupancy,
+        state.employees,
+      ).map(fromRequiredAccessIssue),
     );
   }
   if (state.resources.cash < blueprint.cost.cash) {
