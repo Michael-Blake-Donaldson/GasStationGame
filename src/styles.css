@@ -93,7 +93,8 @@ button:focus-visible,
 .brand-block h1,
 .panel-heading h2,
 .modal-header h2,
-.guide-grid h3 {
+.guide-grid h3,
+.operations-heading h3 {
   margin: 0;
   font-family: var(--font-display);
   text-transform: uppercase;
@@ -219,7 +220,7 @@ button:focus-visible,
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-columns: repeat(4, minmax(100px, 1fr)) 1.4fr;
+  grid-template-columns: repeat(5, minmax(92px, 1fr)) 1.35fr;
   border-bottom: 1px solid var(--rule);
   background: #121917;
 }
@@ -360,7 +361,8 @@ button:focus-visible,
 }
 
 .crew-copy strong,
-.crew-copy span {
+.crew-copy span,
+.crew-copy small {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -375,6 +377,14 @@ button:focus-visible,
   margin-top: 4px;
   color: var(--muted);
   font-size: 10px;
+}
+
+.crew-copy small {
+  margin-top: 3px;
+  color: var(--green);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .fatigue {
@@ -679,6 +689,21 @@ button:focus-visible,
   color: var(--cream);
   background: #111916;
   box-shadow: var(--shadow);
+  scrollbar-color: var(--rule-strong) #0c1210;
+  scrollbar-width: thin;
+}
+
+.modal-shell::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal-shell::-webkit-scrollbar-track {
+  background: #0c1210;
+}
+
+.modal-shell::-webkit-scrollbar-thumb {
+  border: 2px solid #0c1210;
+  background: #59635c;
 }
 
 .modal-backdrop--drawer {
@@ -797,6 +822,234 @@ button:focus-visible,
 
 .guide-note p {
   margin: 0;
+}
+
+.operations-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid var(--rule);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.operations-summary > div {
+  min-width: 0;
+  padding: 14px 16px;
+  border-right: 1px solid var(--rule);
+}
+
+.operations-summary > div:last-child {
+  border-right: 0;
+}
+
+.operations-summary span,
+.retail-card-title span,
+.price-control span {
+  display: block;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.operations-summary strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--amber);
+  font-family: var(--font-display);
+  font-size: 28px;
+}
+
+.operations-closed {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-left: 2px solid var(--amber);
+  color: var(--amber);
+  background: rgba(255, 197, 110, 0.07);
+  font-size: 10px;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.operations-section {
+  margin-top: 24px;
+}
+
+.operations-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.operations-heading h3 {
+  font-size: 23px;
+}
+
+.operations-heading > span {
+  color: var(--muted);
+  font-size: 9px;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.retail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.retail-card {
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid var(--rule);
+  background: var(--panel-raised);
+}
+
+.retail-card[data-product='fuel'] {
+  border-top: 2px solid var(--amber);
+}
+
+.retail-card[data-product='food'] {
+  border-top: 2px solid var(--green);
+}
+
+.retail-card-title {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.retail-card-title strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+.retail-card-title small {
+  color: var(--muted);
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.price-control {
+  display: grid;
+  grid-template-columns: 42px 1fr 42px;
+  align-items: stretch;
+  margin: 14px 0 9px;
+  border: 1px solid var(--rule);
+}
+
+.price-control > div {
+  padding: 7px 10px;
+  text-align: center;
+}
+
+.price-control strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--amber);
+  font-family: var(--font-display);
+  font-size: 22px;
+}
+
+.price-control button,
+.order-button,
+.assignment-actions button {
+  border: 1px solid var(--rule-strong);
+  color: var(--cream);
+  background: rgba(0, 0, 0, 0.16);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.price-control button {
+  border-top: 0;
+  border-bottom: 0;
+  font-size: 18px;
+}
+
+.price-control button:first-child {
+  border-left: 0;
+}
+
+.price-control button:last-child {
+  border-right: 0;
+}
+
+.price-control button:hover,
+.order-button:hover,
+.assignment-actions button:hover {
+  border-color: var(--amber);
+  color: var(--ink);
+  background: var(--amber);
+}
+
+.price-control button:disabled,
+.order-button:disabled,
+.assignment-actions button:disabled {
+  border-color: var(--rule);
+  color: #706b5f;
+  background: rgba(0, 0, 0, 0.08);
+  cursor: not-allowed;
+}
+
+.order-button {
+  width: 100%;
+  min-height: 34px;
+  color: var(--amber);
+  font-size: 9px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.assignment-list {
+  display: grid;
+  gap: 7px;
+}
+
+.assignment-card {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.assignment-copy strong,
+.assignment-copy span {
+  display: block;
+}
+
+.assignment-copy strong {
+  font-size: 12px;
+}
+
+.assignment-copy span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.assignment-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.assignment-actions button {
+  min-width: 76px;
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.assignment-actions .cancel-button {
+  color: #ff9c86;
 }
 
 .event-history-intro {
@@ -922,7 +1175,7 @@ button:focus-visible,
   }
 
   .resource-strip {
-    grid-template-columns: repeat(5, minmax(112px, 1fr));
+    grid-template-columns: repeat(6, minmax(112px, 1fr));
     overflow-x: auto;
   }
 
@@ -1040,6 +1293,18 @@ button:focus-visible,
 
   .guide-grid {
     grid-template-columns: 1fr;
+  }
+
+  .retail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .assignment-card {
+    grid-template-columns: 1fr;
+  }
+
+  .assignment-actions button {
+    flex: 1;
   }
 
   .guide-number {

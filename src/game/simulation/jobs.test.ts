@@ -3,17 +3,23 @@ import {
   createInitialState,
   dispatchSimulationCommand,
   greatPlainsScenario,
+  greatPlainsSimulationContext,
   greatPlainsStationGrid,
 } from '../scenarios/greatPlains';
 import {
-  advanceSimulationByClockUnits,
-  advanceSimulationStep,
+  advanceSimulationByClockUnits as advanceByClockUnitsWithContext,
+  advanceSimulationStep as advanceStepWithContext,
 } from './advanceSimulation';
 import { CLOCK_UNITS_PER_MINUTE } from './clock';
 import { createStationOccupancyState, type StationOccupancyState } from './grid';
 import { assertScenarioDefinition, findJobRoute } from './jobs';
 
 type GreatPlainsState = ReturnType<typeof createInitialState>;
+
+const advanceSimulationByClockUnits = (state: GreatPlainsState, clockUnits: number) =>
+  advanceByClockUnitsWithContext(state, clockUnits, greatPlainsSimulationContext);
+const advanceSimulationStep = (state: GreatPlainsState) =>
+  advanceStepWithContext(state, greatPlainsSimulationContext);
 
 const assignJob = (
   state: GreatPlainsState,
@@ -50,11 +56,11 @@ const withFixedWalls = (
 });
 
 describe('scenario jobs and work targets', () => {
-  it('validates the four Great Plains employees, targets, and jobs', () => {
+  it('validates the Great Plains employees, targets, and jobs', () => {
     expect(() => assertScenarioDefinition(greatPlainsScenario)).not.toThrow();
     expect(greatPlainsScenario.initialEmployeePositions).toHaveLength(4);
     expect(greatPlainsScenario.workTargets).toHaveLength(4);
-    expect(greatPlainsScenario.jobs).toHaveLength(4);
+    expect(greatPlainsScenario.jobs).toHaveLength(6);
   });
 
   it('routes every employee to its fixture job without consuming source order', () => {

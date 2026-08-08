@@ -3,6 +3,7 @@ import { appendDomainEvent } from './events';
 import { findJobRoute } from './jobs';
 import type { SimulationContext } from './scenario';
 import type { SimulationState, TimeMode } from './types';
+import { setBusinessPrice } from './business';
 
 export interface SetTimeModeCommand {
   readonly mode: TimeMode;
@@ -20,8 +21,24 @@ export interface CancelJobCommand {
   readonly type: 'job.cancel';
 }
 
+export interface SetRetailPriceCommand {
+  readonly product: 'food' | 'fuel';
+  readonly type: 'retail.price.set';
+  readonly unitPrice: number;
+}
+
+export interface OrderInventoryCommand {
+  readonly product: 'food' | 'fuel';
+  readonly quantity: number;
+  readonly type: 'inventory.order';
+}
+
 export type SimulationCommand =
-  AssignJobCommand | CancelJobCommand | SetTimeModeCommand;
+  | AssignJobCommand
+  | CancelJobCommand
+  | OrderInventoryCommand
+  | SetRetailPriceCommand
+  | SetTimeModeCommand;
 
 export interface CommandEnvelope {
   readonly atTick: number;
@@ -45,9 +62,15 @@ export type CommandReceiptReason =
   | 'job-target-unavailable'
   | 'job-target-unreachable'
   | 'job-unavailable'
+  | 'inventory-insufficient-cash'
+  | 'inventory-ordered'
+  | 'inventory-overflow'
   | 'night-fast-capped'
   | 'night-pause-converted'
   | 'simulation-complete'
+  | 'retail-closed'
+  | 'retail-price-unchanged'
+  | 'retail-price-updated'
   | 'time-mode-unchanged'
   | 'time-mode-updated'
   | 'unsupported-command-type';
@@ -98,6 +121,9 @@ const isTimeMode = (value: unknown): value is TimeMode =>
 const isTechnicalId = (value: unknown): value is string =>
   typeof value === 'string' && /^[a-z0-9-]+$/u.test(value);
 
+const isRetailProduct = (value: unknown): value is 'food' | 'fuel' =>
+  value === 'food' || value === 'fuel';
+
 export const parseSimulationCommand = (
   value: unknown,
 ): SimulationCommand | undefined => {
@@ -118,6 +144,26 @@ export const parseSimulationCommand = (
     case 'job.cancel':
       return isTechnicalId(value.employeeId)
         ? { employeeId: value.employeeId, type: 'job.cancel' }
+        : undefined;
+    case 'retail.price.set':
+      return isRetailProduct(value.product) &&
+        typeof value.unitPrice === 'number' &&
+        Number.isSafeInteger(value.unitPrice)
+        ? {
+            product: value.product,
+            type: 'retail.price.set',
+            unitPrice: value.unitPrice,
+          }
+        : undefined;
+    case 'inventory.order':
+      return isRetailProduct(value.product) &&
+        typeof value.quantity === 'number' &&
+        Number.isSafeInteger(value.quantity)
+        ? {
+            product: value.product,
+            quantity: value.quantity,
+            type: 'inventory.order',
+          }
         : undefined;
     default:
       return undefined;
@@ -379,6 +425,145 @@ const dispatchCancelJob = (
   };
 };
 
+const rejectedRetailCommand = (
+  state: SimulationState,
+  envelope: RuntimeCommandEnvelope,
+  reason: Extract<
+    CommandReceiptReason,
+    | 'inventory-insufficient-cash'
+    | 'inventory-overflow'
+    | 'retail-closed'
+    | 'retail-price-unchanged'
+  >,
+): DispatchCommandResult => ({
+  receipt: receiptFor(envelope, {
+    changed: false,
+    emittedEventSequences: [],
+    reason,
+    status: reason === 'retail-price-unchanged' ? 'accepted' : 'rejected',
+  }),
+  state,
+});
+
+const dispatchSetRetailPrice = (
+  state: SimulationState,
+  envelope: RuntimeCommandEnvelope,
+  command: SetRetailPriceCommand,
+  context: SimulationContext,
+): DispatchCommandResult => {
+  if (state.phase !== 'day') {
+    return rejectedRetailCommand(state, envelope, 'retail-closed');
+  }
+  const previousUnitPrice = state.business.prices[command.product];
+  if (command.unitPrice === previousUnitPrice) {
+    return rejectedRetailCommand(state, envelope, 'retail-price-unchanged');
+  }
+  let business;
+  try {
+    business = setBusinessPrice(
+      state.business,
+      context.scenario.business,
+      command.product,
+      command.unitPrice,
+    );
+  } catch {
+    return {
+      receipt: receiptFor(envelope, {
+        changed: false,
+        emittedEventSequences: [],
+        reason: 'invalid-command-payload',
+        status: 'rejected',
+      }),
+      state,
+    };
+  }
+  const next = appendDomainEvent(
+    { ...state, business },
+    {
+      currentUnitPrice: command.unitPrice,
+      previousUnitPrice,
+      product: command.product,
+      reason: 'player-request',
+      type: 'retail.price-changed',
+    },
+  );
+  return {
+    receipt: receiptFor(envelope, {
+      changed: true,
+      emittedEventSequences: [state.nextEventSequence],
+      reason: 'retail-price-updated',
+      status: 'accepted',
+    }),
+    state: next,
+  };
+};
+
+const dispatchOrderInventory = (
+  state: SimulationState,
+  envelope: RuntimeCommandEnvelope,
+  command: OrderInventoryCommand,
+  context: SimulationContext,
+): DispatchCommandResult => {
+  if (state.phase !== 'day') {
+    return rejectedRetailCommand(state, envelope, 'retail-closed');
+  }
+  if (command.quantity < 1 || command.quantity > 1_000) {
+    return {
+      receipt: receiptFor(envelope, {
+        changed: false,
+        emittedEventSequences: [],
+        reason: 'invalid-command-payload',
+        status: 'rejected',
+      }),
+      state,
+    };
+  }
+  const wholesaleUnitCost =
+    context.scenario.business.products[command.product].wholesaleUnitCost;
+  const totalCost = wholesaleUnitCost * command.quantity;
+  const stockBefore = state.resources[command.product];
+  const stockAfter = stockBefore + command.quantity;
+  if (!Number.isSafeInteger(totalCost) || !Number.isSafeInteger(stockAfter)) {
+    return rejectedRetailCommand(state, envelope, 'inventory-overflow');
+  }
+  if (state.resources.cash < totalCost) {
+    return rejectedRetailCommand(state, envelope, 'inventory-insufficient-cash');
+  }
+  const cashBefore = state.resources.cash;
+  const cashAfter = cashBefore - totalCost;
+  const next = appendDomainEvent(
+    {
+      ...state,
+      resources: {
+        ...state.resources,
+        cash: cashAfter,
+        [command.product]: stockAfter,
+      },
+    },
+    {
+      cashAfter,
+      cashBefore,
+      product: command.product,
+      quantity: command.quantity,
+      reason: 'player-request',
+      stockAfter,
+      stockBefore,
+      totalCost,
+      type: 'inventory.ordered',
+      wholesaleUnitCost,
+    },
+  );
+  return {
+    receipt: receiptFor(envelope, {
+      changed: true,
+      emittedEventSequences: [state.nextEventSequence],
+      reason: 'inventory-ordered',
+      status: 'accepted',
+    }),
+    state: next,
+  };
+};
+
 export const dispatchSimulationCommand = (
   state: SimulationState,
   envelope: unknown,
@@ -455,9 +640,13 @@ export const dispatchSimulationCommand = (
 
   const command = parseSimulationCommand(runtimeCommand);
   if (command === undefined) {
-    const knownType = ['job.assign', 'job.cancel', 'time-mode.set'].includes(
-      runtimeCommand.type,
-    );
+    const knownType = [
+      'inventory.order',
+      'job.assign',
+      'job.cancel',
+      'retail.price.set',
+      'time-mode.set',
+    ].includes(runtimeCommand.type);
     return {
       receipt: receiptFor(envelope, {
         changed: false,
@@ -475,6 +664,10 @@ export const dispatchSimulationCommand = (
       return dispatchAssignJob(state, envelope, command, context);
     case 'job.cancel':
       return dispatchCancelJob(state, envelope, command);
+    case 'retail.price.set':
+      return dispatchSetRetailPrice(state, envelope, command, context);
+    case 'inventory.order':
+      return dispatchOrderInventory(state, envelope, command, context);
     default:
       return command satisfies never;
   }

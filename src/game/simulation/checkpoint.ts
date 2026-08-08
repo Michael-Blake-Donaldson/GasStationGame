@@ -4,7 +4,7 @@ import type { SimulationContext } from './scenario';
 import type { DomainEvent, Employee, SimulationState } from './types';
 import { assertSimulationState } from './validation';
 
-export const SIMULATION_CHECKPOINT_VERSION = 5;
+export const SIMULATION_CHECKPOINT_VERSION = 6;
 
 const cloneDomainEvent = (event: DomainEvent): DomainEvent => {
   switch (event.type) {
@@ -61,6 +61,17 @@ export const createSimulationCheckpoint = (
   return {
     version: SIMULATION_CHECKPOINT_VERSION as typeof SIMULATION_CHECKPOINT_VERSION,
     absoluteClockUnit: state.absoluteClockUnit,
+    business: {
+      activeCustomers: state.business.activeCustomers.map((customer) => ({
+        ...customer,
+        stage: { ...customer.stage },
+      })),
+      completedCustomerCount: state.business.completedCustomerCount,
+      nextCustomerSequence: state.business.nextCustomerSequence,
+      prices: { ...state.business.prices },
+      trafficBaselineReason: state.business.trafficBaselineReason,
+      trafficStartsAtClockUnit: state.business.trafficStartsAtClockUnit,
+    },
     clockStepRemainderTimeUnits: state.clockStepRemainderTimeUnits,
     completedNights: state.completedNights,
     employees: [...state.employees]
@@ -100,7 +111,7 @@ export const createSimulationCheckpoint = (
   };
 };
 
-export type SimulationCheckpointV5 = ReturnType<typeof createSimulationCheckpoint>;
+export type SimulationCheckpointV6 = ReturnType<typeof createSimulationCheckpoint>;
 
 export const hashSimulationState = (
   state: SimulationState,

@@ -1,12 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import type { SimulationState, TimeMode } from './types';
 import { CLOCK_UNITS_PER_MINUTE } from './clock';
-import { createInitialState } from '../scenarios/greatPlains';
+import {
+  createInitialState,
+  greatPlainsSimulationContext,
+} from '../scenarios/greatPlains';
 import {
   createFixedStepRunner,
-  pumpSimulation,
+  DEFAULT_MAX_STEPS_PER_PUMP,
+  pumpSimulation as pumpWithContext,
   type FixedStepRunnerState,
 } from './fixedStepRunner';
+
+const pumpSimulation = (
+  simulation: SimulationState,
+  runner: FixedStepRunnerState,
+  elapsedMicroseconds: number,
+  maxSteps = DEFAULT_MAX_STEPS_PER_PUMP,
+) =>
+  pumpWithContext(
+    simulation,
+    runner,
+    elapsedMicroseconds,
+    greatPlainsSimulationContext,
+    maxSteps,
+  );
 
 const stateWithTimeMode = (
   state: SimulationState,

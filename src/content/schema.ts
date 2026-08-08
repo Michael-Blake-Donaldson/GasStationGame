@@ -76,8 +76,35 @@ export const jobDefinitionSchema = z.object({
   workDurationClockUnits: z.number().int().positive(),
 });
 
+const retailProductDefinitionSchema = z.object({
+  baseDemandUnits: z.number().int().nonnegative(),
+  defaultUnitPrice: z.number().int().positive(),
+  demandStepUnits: z.number().int().nonnegative(),
+  demandVariationCount: z.number().int().positive(),
+  maximumUnitPrice: z.number().int().positive(),
+  serviceClockUnits: z.number().int().positive(),
+  wholesaleUnitCost: z.number().int().positive(),
+});
+
+export const businessDefinitionSchema = z.object({
+  products: z.object({
+    food: retailProductDefinitionSchema,
+    fuel: retailProductDefinitionSchema,
+  }),
+  trafficWindows: z
+    .array(
+      z.object({
+        endMinute: z.number().int().positive(),
+        intervalMinutes: z.number().int().positive(),
+        startMinute: z.number().int().nonnegative(),
+      }),
+    )
+    .min(1),
+});
+
 export const regionSchema = z.object({
   id: technicalIdSchema,
+  business: businessDefinitionSchema,
   displayName: z.string().min(1),
   identity: z.array(z.string().min(1)).min(1),
   pressures: z.array(z.string().min(1)).min(1),

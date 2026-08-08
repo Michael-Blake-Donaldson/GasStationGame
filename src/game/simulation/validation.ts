@@ -3,6 +3,7 @@ import {
   phaseForClockUnit,
   wholeMinuteForClockUnit,
 } from './clock';
+import { assertBusinessState } from './business';
 import { assertWorkforceState } from './jobs';
 import { assertSeededRandomState } from './random';
 import type { SimulationContext } from './scenario';
@@ -111,6 +112,11 @@ export const assertSimulationState = (
   for (const key of RESOURCE_KEYS) {
     assertNonNegativeSafeInteger(state.resources[key], `resources.${key}`);
   }
+  assertBusinessState(
+    context.scenario.business,
+    state.business,
+    state.absoluteClockUnit,
+  );
   for (const employee of state.employees) {
     if (employee.name.trim().length === 0 || employee.role.trim().length === 0) {
       throw new RangeError(`Employee ${employee.id} needs a name and role.`);

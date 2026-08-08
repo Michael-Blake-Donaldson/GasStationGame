@@ -10,14 +10,16 @@ import {
   writeRecoveryWithRetry,
 } from '../persistence/recoveryRotation';
 import { tauriRecoveryStorage } from '../persistence/tauriRecoveryStorage';
-import type { CommandReceipt } from '../simulation/commands';
+import type { CommandReceipt, SimulationCommand } from '../simulation/commands';
 import {
   createInitialState,
   dispatchSimulationCommand,
   greatPlainsSaveContext,
+  greatPlainsSimulationContext,
 } from '../scenarios/greatPlains';
 import {
   createFixedStepRunner,
+  DEFAULT_MAX_STEPS_PER_PUMP,
   pumpSimulation,
   type FixedStepRunnerState,
 } from '../simulation/fixedStepRunner';
@@ -42,9 +44,13 @@ interface RuntimeState {
 }
 
 interface SimulationRuntime {
+  readonly assignJob: (employeeId: string, jobId: string) => void;
+  readonly cancelJob: (employeeId: string) => void;
   readonly chooseTimeMode: (mode: TimeMode) => void;
   readonly isRecoveryReady: boolean;
   readonly lastCommandReceipt: CommandReceipt | null;
+  readonly orderInventory: (product: 'food' | 'fuel', quantity: number) => void;
+  readonly setRetailPrice: (product: 'food' | 'fuel', unitPrice: number) => void;
   readonly simulation: SimulationState;
 }
 
@@ -106,6 +112,8 @@ export const useSimulationRuntime = ({
           current.simulation,
           current.runner,
           elapsedMicroseconds,
+          greatPlainsSimulationContext,
+          DEFAULT_MAX_STEPS_PER_PUMP,
         );
         return {
           ...current,
@@ -162,14 +170,14 @@ export const useSimulationRuntime = ({
       });
   }, [isRecoveryReady, runtime]);
 
-  const chooseTimeMode = useCallback(
-    (mode: TimeMode) => {
+  const issueCommand = useCallback(
+    (command: SimulationCommand) => {
       if (!isRecoveryReady) return;
       setRuntime((current) => {
         const sequence = current.nextCommandSequence;
         const result = dispatchSimulationCommand(current.simulation, {
           atTick: current.simulation.tick,
-          command: { type: 'time-mode.set', mode },
+          command,
           id: `ui-command-${String(sequence)}`,
           sequence,
         });
@@ -184,10 +192,45 @@ export const useSimulationRuntime = ({
     [isRecoveryReady],
   );
 
+  const assignJob = useCallback(
+    (employeeId: string, jobId: string) => {
+      issueCommand({ employeeId, jobId, type: 'job.assign' });
+    },
+    [issueCommand],
+  );
+  const cancelJob = useCallback(
+    (employeeId: string) => {
+      issueCommand({ employeeId, type: 'job.cancel' });
+    },
+    [issueCommand],
+  );
+  const chooseTimeMode = useCallback(
+    (mode: TimeMode) => {
+      issueCommand({ mode, type: 'time-mode.set' });
+    },
+    [issueCommand],
+  );
+  const orderInventory = useCallback(
+    (product: 'food' | 'fuel', quantity: number) => {
+      issueCommand({ product, quantity, type: 'inventory.order' });
+    },
+    [issueCommand],
+  );
+  const setRetailPrice = useCallback(
+    (product: 'food' | 'fuel', unitPrice: number) => {
+      issueCommand({ product, type: 'retail.price.set', unitPrice });
+    },
+    [issueCommand],
+  );
+
   return {
+    assignJob,
+    cancelJob,
     chooseTimeMode,
     isRecoveryReady,
     lastCommandReceipt: runtime.lastCommandReceipt,
+    orderInventory,
+    setRetailPrice,
     simulation: runtime.simulation,
   };
 };

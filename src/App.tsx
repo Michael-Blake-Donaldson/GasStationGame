@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Modal } from './components/Modal';
+import { OperationsModal } from './components/OperationsModal';
 import { gameConfig } from './config/game';
 import { greatPlainsRegion } from './content/regions/greatPlains';
 import {
@@ -24,6 +25,7 @@ import type { TimeMode } from './game/simulation/types';
 const RESOURCE_LABELS = [
   ['cash', 'Cash', '$'],
   ['fuel', 'Fuel', ' gal'],
+  ['food', 'Food', ' units'],
   ['ammunition', 'Ammo', ''],
   ['power', 'Power', '%'],
 ] as const;
@@ -47,11 +49,20 @@ const phaseLabel: Record<string, string> = {
 export const App = () => {
   const [isGuideOpen, setGuideOpen] = useState(false);
   const [isHistoryOpen, setHistoryOpen] = useState(false);
-  const { chooseTimeMode, isRecoveryReady, lastCommandReceipt, simulation } =
-    useSimulationRuntime({
-      seed: 1987,
-      targetNightCount: gameConfig.verticalSliceNightCount,
-    });
+  const [isOperationsOpen, setOperationsOpen] = useState(false);
+  const {
+    assignJob,
+    cancelJob,
+    chooseTimeMode,
+    isRecoveryReady,
+    lastCommandReceipt,
+    orderInventory,
+    setRetailPrice,
+    simulation,
+  } = useSimulationRuntime({
+    seed: 1987,
+    targetNightCount: gameConfig.verticalSliceNightCount,
+  });
 
   const topEvent = selectRecentDomainEvents(simulation.eventLedger).at(-1);
   const latestPresentation =
@@ -165,6 +176,11 @@ export const App = () => {
                 <div className="crew-copy">
                   <strong>{employee.name}</strong>
                   <span>{employee.role}</span>
+                  <small>
+                    {employee.activity.status === 'idle'
+                      ? 'Available'
+                      : `${employee.activity.status} / ${employee.activity.jobId.replaceAll('-', ' ')}`}
+                  </small>
                 </div>
                 <div
                   aria-label={`${employee.name} fatigue`}
@@ -180,8 +196,12 @@ export const App = () => {
               </article>
             ))}
           </div>
-          <button className="outline-button" disabled type="button">
-            Job assignment planned
+          <button
+            className="outline-button"
+            onClick={() => setOperationsOpen(true)}
+            type="button"
+          >
+            Open shift board
           </button>
         </aside>
 
@@ -292,26 +312,26 @@ export const App = () => {
           <strong>Keep the station useful. Keep the beacon visible.</strong>
           <p>
             The Great Plains prototype currently demonstrates the station clock,
-            deterministic simulation, and the first playable presentation layer.
+            deterministic simulation, routine customers, and station operations.
           </p>
         </div>
         <div className="guide-grid">
           <section>
             <span className="guide-number">01</span>
-            <h3>Read the shift</h3>
-            <p>Track cash, fuel, ammunition, power, and crew fatigue before dusk.</p>
+            <h3>Staff the shift</h3>
+            <p>
+              Assign one worker to pumps and another to checkout before opening time.
+            </p>
           </section>
           <section>
             <span className="guide-number">02</span>
-            <h3>Control the clock</h3>
-            <p>Pause or change speed during the day. Night restricts unsafe modes.</p>
+            <h3>Run retail</h3>
+            <p>Set fuel and food prices, order stock, then watch queues and sales.</p>
           </section>
           <section>
             <span className="guide-number">03</span>
-            <h3>Trust the ledger</h3>
-            <p>
-              The lower console explains the latest accepted command or world event.
-            </p>
+            <h3>Control the clock</h3>
+            <p>Pause or change speed during the day. Night restricts unsafe modes.</p>
           </section>
         </div>
         <div className="guide-note">
@@ -321,6 +341,17 @@ export const App = () => {
           </p>
         </div>
       </Modal>
+
+      <OperationsModal
+        isOpen={isOperationsOpen}
+        isRecoveryReady={isRecoveryReady}
+        onAssignJob={assignJob}
+        onCancelJob={cancelJob}
+        onClose={() => setOperationsOpen(false)}
+        onOrderInventory={orderInventory}
+        onSetRetailPrice={setRetailPrice}
+        simulation={simulation}
+      />
 
       <Modal
         eyebrow="Station record"

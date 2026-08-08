@@ -7,7 +7,7 @@ import {
   runClockReplay,
   runScenarioReplay,
   type ClockReplayV1,
-  type ScenarioReplayV3,
+  type ScenarioReplayV4,
 } from '../scenarios/greatPlains';
 import { SEEDED_RANDOM_ALGORITHM, SEEDED_RANDOM_VERSION } from './random';
 
@@ -32,12 +32,12 @@ const replayFixture = (): ClockReplayV1 => ({
   targetNightCount: 3,
 });
 
-const scenarioReplayFixture = (): ScenarioReplayV3 => ({
+const scenarioReplayFixture = (): ScenarioReplayV4 => ({
   commands: replayFixture().commands,
   gridDefinitionId: 'great-plains-station-grid',
   gridDefinitionVersion: 1,
   replayKind: 'scenario',
-  replayVersion: 3,
+  replayVersion: 4,
   rng: {
     algorithm: SEEDED_RANDOM_ALGORITHM,
     seed: 1987,
@@ -192,7 +192,7 @@ describe('clock commands and replay', () => {
       const invalid = {
         ...scenarioReplayFixture(),
         ...override,
-      } as unknown as ScenarioReplayV3;
+      } as unknown as ScenarioReplayV4;
       expect(() => runScenarioReplay(invalid)).toThrow(message);
     },
   );

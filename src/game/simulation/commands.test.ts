@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { advanceSimulationByClockUnits } from './advanceSimulation';
+import { advanceSimulationByClockUnits as advanceByClockUnitsWithContext } from './advanceSimulation';
 import {
   dispatchSimulationCommand as dispatchWithContext,
   type CommandEnvelope,
@@ -11,6 +11,11 @@ import {
   dispatchSimulationCommand,
   greatPlainsSimulationContext,
 } from '../scenarios/greatPlains';
+
+const advanceSimulationByClockUnits = (
+  state: ReturnType<typeof createInitialState>,
+  clockUnits: number,
+) => advanceByClockUnitsWithContext(state, clockUnits, greatPlainsSimulationContext);
 
 const commandAtCurrentTick = (
   state: ReturnType<typeof createInitialState>,
@@ -210,6 +215,64 @@ describe('simulation command dispatch', () => {
       changed: false,
       emittedEventSequences: [],
       reason: 'simulation-complete',
+      status: 'rejected',
+    });
+  });
+
+  it('sets bounded daytime retail prices with a causal event', () => {
+    const initial = createInitialState();
+    const result = dispatchSimulationCommand(initial, {
+      atTick: 0,
+      command: { product: 'fuel', type: 'retail.price.set', unitPrice: 7 },
+      id: 'price-fuel',
+      sequence: 0,
+    });
+
+    expect(result.receipt).toMatchObject({
+      changed: true,
+      reason: 'retail-price-updated',
+      status: 'accepted',
+    });
+    expect(result.state.business.prices.fuel).toBe(7);
+    expect(result.state.eventLedger.at(-1)).toMatchObject({
+      currentUnitPrice: 7,
+      previousUnitPrice: 4,
+      product: 'fuel',
+      type: 'retail.price-changed',
+    });
+  });
+
+  it('orders stock with exact integer cost and rejects unaffordable orders', () => {
+    const initial = createInitialState();
+    const ordered = dispatchSimulationCommand(initial, {
+      atTick: 0,
+      command: { product: 'fuel', quantity: 10, type: 'inventory.order' },
+      id: 'order-fuel',
+      sequence: 0,
+    });
+    expect(ordered.receipt).toMatchObject({
+      changed: true,
+      reason: 'inventory-ordered',
+    });
+    expect(ordered.state.resources).toMatchObject({ cash: 400, fuel: 170 });
+    expect(ordered.state.eventLedger.at(-1)).toMatchObject({
+      cashAfter: 400,
+      quantity: 10,
+      stockAfter: 170,
+      totalCost: 20,
+      type: 'inventory.ordered',
+    });
+
+    const unaffordable = dispatchSimulationCommand(initial, {
+      atTick: 0,
+      command: { product: 'fuel', quantity: 1_000, type: 'inventory.order' },
+      id: 'too-much-fuel',
+      sequence: 1,
+    });
+    expect(unaffordable.state).toBe(initial);
+    expect(unaffordable.receipt).toMatchObject({
+      changed: false,
+      reason: 'inventory-insufficient-cash',
       status: 'rejected',
     });
   });

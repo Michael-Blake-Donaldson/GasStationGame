@@ -9,6 +9,8 @@ import {
 } from './clock';
 import { appendDomainEvent } from './events';
 import { advanceEmployeeActivitiesByClockUnit } from './jobs';
+import { advanceBusinessByClockUnit, type BusinessOutcome } from './business';
+import type { SimulationContext } from './scenario';
 import type {
   ResourceChange,
   ResourceKey,
@@ -29,7 +31,7 @@ const RESOURCE_ORDER: readonly ResourceKey[] = [
 export const resourceRequestsForPhase = (
   phase: SimulationPhase,
 ): Partial<Record<ResourceKey, number>> => {
-  if (phase === 'day') return { cash: 12, food: -1, fuel: -2 };
+  if (phase === 'day') return {};
   if (phase === 'night') return { ammunition: -1, power: -4 };
   return {};
 };
@@ -64,9 +66,69 @@ const assertNonNegativeSafeInteger = (value: number, name: string): void => {
   }
 };
 
+const appendBusinessOutcome = (
+  state: SimulationState,
+  outcome: BusinessOutcome,
+): SimulationState => {
+  switch (outcome.type) {
+    case 'customer-arrived':
+      return appendDomainEvent(state, {
+        customerId: outcome.customerId,
+        foodUnitsRequested: outcome.foodUnitsRequested,
+        fuelUnitsRequested: outcome.fuelUnitsRequested,
+        reason: 'authored-traffic-schedule',
+        type: 'customer.arrived',
+      });
+    case 'sale-completed':
+      return appendDomainEvent(state, {
+        ...outcome,
+        reason: 'routine-service-completed',
+        type: 'sale.completed',
+      });
+    case 'customer-completed':
+      return appendDomainEvent(state, {
+        customerId: outcome.customerId,
+        reason: 'routine-service-completed',
+        revenue: outcome.revenue,
+        type: 'customer.completed',
+      });
+  }
+};
+
+const advanceBusinessForCurrentClockUnit = (
+  state: SimulationState,
+  context: SimulationContext,
+): SimulationState => {
+  const isStaffing = (jobId: string): boolean =>
+    state.employees.some(
+      (employee) =>
+        employee.activity.status === 'working' && employee.activity.jobId === jobId,
+    );
+  const result = advanceBusinessByClockUnit(
+    state.business,
+    context.scenario.business,
+    state.resources,
+    state.absoluteClockUnit,
+    {
+      checkout: isStaffing('staff-checkout'),
+      pumps: isStaffing('staff-pumps'),
+    },
+  );
+  let next = {
+    ...state,
+    business: result.business,
+    resources: result.resources,
+  };
+  for (const outcome of result.outcomes) {
+    next = appendBusinessOutcome(next, outcome);
+  }
+  return next;
+};
+
 export const advanceSimulationByClockUnits = (
   state: SimulationState,
   clockUnits: number,
+  context: SimulationContext,
 ): SimulationState => {
   assertNonNegativeSafeInteger(clockUnits, 'clockUnits');
   if (clockUnits === 0 || state.isSliceComplete) return state;
@@ -81,6 +143,7 @@ export const advanceSimulationByClockUnits = (
 
     if (absoluteClockUnit % CLOCK_UNITS_PER_MINUTE !== 0) {
       next = advanceEmployeeActivitiesByClockUnit({ ...next, absoluteClockUnit });
+      next = advanceBusinessForCurrentClockUnit(next, context);
       continue;
     }
 
@@ -153,13 +216,17 @@ export const advanceSimulationByClockUnits = (
     }
 
     if (!isSliceComplete) next = advanceEmployeeActivitiesByClockUnit(next);
+    if (!isSliceComplete) next = advanceBusinessForCurrentClockUnit(next, context);
     if (isSliceComplete) break;
   }
 
   return next;
 };
 
-export const advanceSimulationStep = (state: SimulationState): SimulationState => {
+export const advanceSimulationStep = (
+  state: SimulationState,
+  context: SimulationContext,
+): SimulationState => {
   if (state.isSliceComplete) return state;
 
   const initialUnitCost = timeUnitsPerClockUnit(state.timeMode, state.phase);
@@ -191,7 +258,7 @@ export const advanceSimulationStep = (state: SimulationState): SimulationState =
     const unitCost = timeUnitsPerClockUnit(next.timeMode, next.phase);
     if (unitCost === null || remainingTimeUnits < unitCost) break;
 
-    next = advanceSimulationByClockUnits(next, 1);
+    next = advanceSimulationByClockUnits(next, 1, context);
     remainingTimeUnits -= unitCost;
   }
 
@@ -204,12 +271,13 @@ export const advanceSimulationStep = (state: SimulationState): SimulationState =
 export const advanceSimulationSteps = (
   state: SimulationState,
   stepCount: number,
+  context: SimulationContext,
 ): SimulationState => {
   assertNonNegativeSafeInteger(stepCount, 'stepCount');
   let next = state;
 
   for (let step = 0; step < stepCount; step += 1) {
-    const advanced = advanceSimulationStep(next);
+    const advanced = advanceSimulationStep(next, context);
     if (advanced === next) break;
     next = advanced;
   }

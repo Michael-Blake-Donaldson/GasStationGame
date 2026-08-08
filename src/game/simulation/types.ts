@@ -1,5 +1,6 @@
 import type { SeededRandomState } from './random';
 import type { GridCoordinate, StationOccupancyState } from './grid';
+import type { BusinessState } from './business';
 
 export type SimulationPhase = 'morning' | 'day' | 'dusk' | 'night';
 export type TimeMode = 'paused' | 'slow' | 'normal' | 'fast';
@@ -155,10 +156,57 @@ export type DomainEvent =
       reason: 'work-duration-reached';
       targetId: string;
       type: 'job.completed';
+    })
+  | (DomainEventBase & {
+      customerId: string;
+      foodUnitsRequested: number;
+      fuelUnitsRequested: number;
+      reason: 'authored-traffic-schedule';
+      type: 'customer.arrived';
+    })
+  | (DomainEventBase & {
+      cashAfter: number;
+      cashBefore: number;
+      customerId: string;
+      product: 'food' | 'fuel';
+      reason: 'routine-service-completed';
+      requestedUnits: number;
+      revenue: number;
+      soldUnits: number;
+      stockAfter: number;
+      stockBefore: number;
+      type: 'sale.completed';
+      unitPrice: number;
+    })
+  | (DomainEventBase & {
+      customerId: string;
+      reason: 'routine-service-completed';
+      revenue: number;
+      type: 'customer.completed';
+    })
+  | (DomainEventBase & {
+      currentUnitPrice: number;
+      previousUnitPrice: number;
+      product: 'food' | 'fuel';
+      reason: 'player-request';
+      type: 'retail.price-changed';
+    })
+  | (DomainEventBase & {
+      cashAfter: number;
+      cashBefore: number;
+      product: 'food' | 'fuel';
+      quantity: number;
+      reason: 'player-request';
+      stockAfter: number;
+      stockBefore: number;
+      totalCost: number;
+      type: 'inventory.ordered';
+      wholesaleUnitCost: number;
     });
 
 export interface SimulationState {
   absoluteClockUnit: number;
+  business: BusinessState;
   clockStepRemainderTimeUnits: number;
   completedNights: number;
   employees: readonly Employee[];

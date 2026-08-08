@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  advanceSimulationByClockUnits,
-  advanceSimulationStep,
-  advanceSimulationSteps,
+  advanceSimulationByClockUnits as advanceByClockUnitsWithContext,
+  advanceSimulationStep as advanceStepWithContext,
+  advanceSimulationSteps as advanceStepsWithContext,
   currentDayNumber,
 } from './advanceSimulation';
 import {
@@ -11,9 +11,23 @@ import {
   phaseForMinuteOfDay,
   wholeMinuteForClockUnit,
 } from './clock';
-import { createInitialState } from '../scenarios/greatPlains';
+import {
+  createInitialState,
+  dispatchSimulationCommand,
+  greatPlainsSimulationContext,
+} from '../scenarios/greatPlains';
 import { appendDomainEvent } from './events';
 import type { SimulationState, TimeMode } from './types';
+
+const advanceSimulationByClockUnits = (
+  state: SimulationState,
+  clockUnits: number,
+  context = greatPlainsSimulationContext,
+) => advanceByClockUnitsWithContext(state, clockUnits, context);
+const advanceSimulationStep = (state: SimulationState) =>
+  advanceStepWithContext(state, greatPlainsSimulationContext);
+const advanceSimulationSteps = (state: SimulationState, stepCount: number) =>
+  advanceStepsWithContext(state, stepCount, greatPlainsSimulationContext);
 
 const stateAtMinute = (
   absoluteMinute: number,
@@ -116,38 +130,105 @@ describe('station simulation clock', () => {
     expect(next.clockStepRemainderTimeUnits).toBe(0);
   });
 
-  it('applies explainable hourly day resource flow once', () => {
+  it('does not grant passive daytime income without customer service', () => {
     const initial = stateAtMinute(8 * 60);
     const next = advanceSimulationByClockUnits(initial, 60 * CLOCK_UNITS_PER_MINUTE);
 
-    expect(next.resources).toMatchObject({ cash: 432, food: 47, fuel: 158 });
-    expect(next.eventLedger.at(-1)).toMatchObject({
-      changes: [
-        {
-          after: 432,
-          appliedDelta: 12,
-          before: 420,
-          requestedDelta: 12,
-          resource: 'cash',
-        },
-        {
-          after: 47,
-          appliedDelta: -1,
-          before: 48,
-          requestedDelta: -1,
-          resource: 'food',
-        },
-        {
-          after: 158,
-          appliedDelta: -2,
-          before: 160,
-          requestedDelta: -2,
-          resource: 'fuel',
-        },
-      ],
-      reason: 'day-hourly-flow',
-      type: 'resources.changed',
+    expect(next.resources).toEqual(initial.resources);
+    expect(next.eventLedger.some((event) => event.type === 'resources.changed')).toBe(
+      false,
+    );
+  });
+
+  it('turns staffed routine pump service into exact stock and cash events', () => {
+    let state = createInitialState();
+    state = dispatchSimulationCommand(state, {
+      atTick: 0,
+      command: {
+        employeeId: 'employee-ada',
+        jobId: 'staff-checkout',
+        type: 'job.assign',
+      },
+      id: 'staff-checkout',
+      sequence: 0,
+    }).state;
+    state = dispatchSimulationCommand(state, {
+      atTick: 0,
+      command: {
+        employeeId: 'employee-bo',
+        jobId: 'staff-pumps',
+        type: 'job.assign',
+      },
+      id: 'staff-pumps',
+      sequence: 1,
+    }).state;
+
+    const next = advanceSimulationByClockUnits(
+      state,
+      63 * CLOCK_UNITS_PER_MINUTE,
+      greatPlainsSimulationContext,
+    );
+
+    expect(next.resources).toMatchObject({ cash: 444, food: 48, fuel: 154 });
+    expect(next.business.completedCustomerCount).toBe(1);
+    expect(next.eventLedger).toContainEqual(
+      expect.objectContaining({
+        cashAfter: 444,
+        customerId: 'routine-customer-0',
+        product: 'fuel',
+        revenue: 24,
+        soldUnits: 6,
+        stockAfter: 154,
+        type: 'sale.completed',
+      }),
+    );
+  });
+
+  it('reconciles every authored customer across a fully staffed business day', () => {
+    let state = createInitialState();
+    state = dispatchSimulationCommand(state, {
+      atTick: 0,
+      command: {
+        employeeId: 'employee-ada',
+        jobId: 'staff-checkout',
+        type: 'job.assign',
+      },
+      id: 'full-day-checkout',
+      sequence: 0,
+    }).state;
+    state = dispatchSimulationCommand(state, {
+      atTick: 0,
+      command: {
+        employeeId: 'employee-bo',
+        jobId: 'staff-pumps',
+        type: 'job.assign',
+      },
+      id: 'full-day-pumps',
+      sequence: 1,
+    }).state;
+
+    const dusk = advanceSimulationByClockUnits(
+      state,
+      10 * 60 * CLOCK_UNITS_PER_MINUTE,
+      greatPlainsSimulationContext,
+    );
+    const customerEvents = dusk.eventLedger.filter((event) =>
+      event.type.startsWith('customer.'),
+    );
+    const saleEvents = dusk.eventLedger.filter(
+      (event) => event.type === 'sale.completed',
+    );
+
+    expect(dusk.phase).toBe('dusk');
+    expect(dusk.business).toMatchObject({
+      activeCustomers: [],
+      completedCustomerCount: 82,
+      nextCustomerSequence: 82,
     });
+    expect(dusk.resources).toMatchObject({ cash: 1_348, food: 0, fuel: 0 });
+    expect(customerEvents).toHaveLength(164);
+    expect(saleEvents).toHaveLength(136);
+    expect(saleEvents.reduce((total, event) => total + event.revenue, 0)).toBe(928);
   });
 
   it('orders phase entry before resource causality at a shared boundary', () => {

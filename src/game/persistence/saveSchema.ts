@@ -4,7 +4,7 @@ import { SIMULATION_CHECKPOINT_VERSION } from '../simulation/checkpoint';
 import { SEEDED_RANDOM_ALGORITHM, SEEDED_RANDOM_VERSION } from '../simulation/random';
 
 export const SAVE_FORMAT_ID = 'station-campaign-save' as const;
-export const SAVE_SCHEMA_VERSION = 1 as const;
+export const SAVE_SCHEMA_VERSION = 2 as const;
 export const SAVE_CHECKSUM_ALGORITHM = 'fnv1a32' as const;
 export const SAVE_SETTINGS_VERSION = 1 as const;
 export const SAVE_DIFFICULTY_VERSION = 1 as const;
@@ -222,7 +222,7 @@ const jobCompletedEvent = eventBase
     type: z.literal('job.completed'),
   })
   .strict();
-const domainEvent = z.discriminatedUnion('type', [
+const domainEventV5 = z.discriminatedUnion('type', [
   simulationStartedEvent,
   phaseEnteredEvent,
   nightCompletedEvent,
@@ -236,13 +236,78 @@ const domainEvent = z.discriminatedUnion('type', [
   jobCompletedEvent,
 ]);
 
+const customerArrivedEvent = eventBase
+  .extend({
+    customerId: technicalId,
+    foodUnitsRequested: nonNegativeSafeInteger,
+    fuelUnitsRequested: nonNegativeSafeInteger,
+    reason: z.literal('authored-traffic-schedule'),
+    type: z.literal('customer.arrived'),
+  })
+  .strict();
+const saleCompletedEvent = eventBase
+  .extend({
+    cashAfter: nonNegativeSafeInteger,
+    cashBefore: nonNegativeSafeInteger,
+    customerId: technicalId,
+    product: z.enum(['food', 'fuel']),
+    reason: z.literal('routine-service-completed'),
+    requestedUnits: nonNegativeSafeInteger,
+    revenue: nonNegativeSafeInteger,
+    soldUnits: nonNegativeSafeInteger,
+    stockAfter: nonNegativeSafeInteger,
+    stockBefore: nonNegativeSafeInteger,
+    type: z.literal('sale.completed'),
+    unitPrice: positiveSafeInteger,
+  })
+  .strict();
+const customerCompletedEvent = eventBase
+  .extend({
+    customerId: technicalId,
+    reason: z.literal('routine-service-completed'),
+    revenue: nonNegativeSafeInteger,
+    type: z.literal('customer.completed'),
+  })
+  .strict();
+const retailPriceChangedEvent = eventBase
+  .extend({
+    currentUnitPrice: positiveSafeInteger,
+    previousUnitPrice: positiveSafeInteger,
+    product: z.enum(['food', 'fuel']),
+    reason: z.literal('player-request'),
+    type: z.literal('retail.price-changed'),
+  })
+  .strict();
+const inventoryOrderedEvent = eventBase
+  .extend({
+    cashAfter: nonNegativeSafeInteger,
+    cashBefore: nonNegativeSafeInteger,
+    product: z.enum(['food', 'fuel']),
+    quantity: positiveSafeInteger,
+    reason: z.literal('player-request'),
+    stockAfter: nonNegativeSafeInteger,
+    stockBefore: nonNegativeSafeInteger,
+    totalCost: positiveSafeInteger,
+    type: z.literal('inventory.ordered'),
+    wholesaleUnitCost: positiveSafeInteger,
+  })
+  .strict();
+const domainEventV6 = z.discriminatedUnion('type', [
+  ...domainEventV5.options,
+  customerArrivedEvent,
+  saleCompletedEvent,
+  customerCompletedEvent,
+  retailPriceChangedEvent,
+  inventoryOrderedEvent,
+]);
+
 export const simulationCheckpointV5Schema = z
   .object({
     absoluteClockUnit: nonNegativeSafeInteger,
     clockStepRemainderTimeUnits: nonNegativeSafeInteger,
     completedNights: nonNegativeSafeInteger,
     employees: z.array(employee),
-    eventLedger: z.array(domainEvent).min(1),
+    eventLedger: z.array(domainEventV5).min(1),
     isSliceComplete: z.boolean(),
     nextEventSequence: nonNegativeSafeInteger,
     phase: z.enum(['morning', 'day', 'dusk', 'night']),
@@ -282,9 +347,56 @@ export const simulationCheckpointV5Schema = z
     targetNightCount: positiveSafeInteger,
     tick: nonNegativeSafeInteger,
     timeMode,
-    version: z.literal(SIMULATION_CHECKPOINT_VERSION),
+    version: z.literal(5),
   })
   .strict();
+
+const customerStage = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('checkout-queue') }).strict(),
+  z.object({ type: z.literal('pump-queue') }).strict(),
+  z
+    .object({
+      remainingClockUnits: positiveSafeInteger,
+      type: z.literal('checkout-service'),
+      unitPrice: positiveSafeInteger,
+    })
+    .strict(),
+  z
+    .object({
+      remainingClockUnits: positiveSafeInteger,
+      type: z.literal('pump-service'),
+      unitPrice: positiveSafeInteger,
+    })
+    .strict(),
+]);
+const businessState = z
+  .object({
+    activeCustomers: z.array(
+      z
+        .object({
+          arrivedAtClockUnit: nonNegativeSafeInteger,
+          foodUnitsRequested: nonNegativeSafeInteger,
+          fuelUnitsRequested: nonNegativeSafeInteger,
+          id: technicalId,
+          revenue: nonNegativeSafeInteger,
+          sequence: nonNegativeSafeInteger,
+          stage: customerStage,
+        })
+        .strict(),
+    ),
+    completedCustomerCount: nonNegativeSafeInteger,
+    nextCustomerSequence: nonNegativeSafeInteger,
+    prices: z.object({ food: positiveSafeInteger, fuel: positiveSafeInteger }).strict(),
+    trafficBaselineReason: z.enum(['legacy-save-migration', 'scenario-start']),
+    trafficStartsAtClockUnit: nonNegativeSafeInteger,
+  })
+  .strict();
+
+export const simulationCheckpointV6Schema = simulationCheckpointV5Schema.extend({
+  business: businessState,
+  eventLedger: z.array(domainEventV6).min(1),
+  version: z.literal(SIMULATION_CHECKPOINT_VERSION),
+});
 
 export const campaignStateV1Schema = z
   .object({
@@ -313,7 +425,7 @@ export const savePayloadV1Schema = z
       .strict(),
     format: z.literal(SAVE_FORMAT_ID),
     metadata: z.object({ saveSequence: nonNegativeSafeInteger }).strict(),
-    schemaVersion: z.literal(SAVE_SCHEMA_VERSION),
+    schemaVersion: z.literal(1),
     session: z.object({ nextCommandSequence: nonNegativeSafeInteger }).strict(),
     settings: z.object({ schemaVersion: z.literal(SAVE_SETTINGS_VERSION) }).strict(),
     station: simulationCheckpointV5Schema,
@@ -331,5 +443,23 @@ export const saveDocumentV1Schema = savePayloadV1Schema
   })
   .strict();
 
+export const savePayloadV2Schema = savePayloadV1Schema.extend({
+  schemaVersion: z.literal(SAVE_SCHEMA_VERSION),
+  station: simulationCheckpointV6Schema,
+});
+
+export const saveDocumentV2Schema = savePayloadV2Schema
+  .extend({
+    checksum: z
+      .object({
+        algorithm: z.literal(SAVE_CHECKSUM_ALGORITHM),
+        value: z.string().regex(/^[0-9a-f]{8}$/u),
+      })
+      .strict(),
+  })
+  .strict();
+
 export type SaveDocumentV1 = z.infer<typeof saveDocumentV1Schema>;
 export type SavePayloadV1 = z.infer<typeof savePayloadV1Schema>;
+export type SaveDocumentV2 = z.infer<typeof saveDocumentV2Schema>;
+export type SavePayloadV2 = z.infer<typeof savePayloadV2Schema>;

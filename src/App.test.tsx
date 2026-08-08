@@ -189,4 +189,74 @@ describe('App simulation timer', () => {
 
     act(() => root.unmount());
   });
+
+  it('runs prices, stock orders, and crew assignments from the shift board', () => {
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(<App />);
+    });
+
+    const shiftButton = [
+      ...container.querySelectorAll<HTMLButtonElement>('button'),
+    ].find((button) => button.textContent.includes('Open shift board'));
+    expect(shiftButton).toBeDefined();
+    if (shiftButton === undefined) throw new Error('Shift board button is missing.');
+
+    act(() => {
+      shiftButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const dialog = document.querySelector('[role="dialog"]');
+    const fuelCard = dialog?.querySelector<HTMLElement>('[data-product="fuel"]');
+    const increaseFuel = fuelCard?.querySelector<HTMLButtonElement>(
+      'button[aria-label="Increase fuel price"]',
+    );
+    const orderFuel = [
+      ...(fuelCard?.querySelectorAll<HTMLButtonElement>('button') ?? []),
+    ].find((button) => button.textContent.includes('Order 10'));
+    expect(dialog?.textContent).toContain('Station operations');
+    expect(fuelCard?.textContent).toContain('160 units');
+    expect(increaseFuel).not.toBeNull();
+    expect(orderFuel).toBeDefined();
+    expect(orderFuel?.getAttribute('aria-label')).toBe('Order 10 fuel for $20');
+    if (
+      increaseFuel === null ||
+      increaseFuel === undefined ||
+      orderFuel === undefined
+    ) {
+      throw new Error('Fuel controls are missing.');
+    }
+
+    act(() => {
+      increaseFuel.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(fuelCard?.textContent).toContain('$5');
+    expect(container.querySelector('[role="status"]')?.textContent).toContain(
+      'Retail price updated.',
+    );
+
+    act(() => {
+      orderFuel.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(fuelCard?.textContent).toContain('170 units');
+    expect(dialog?.textContent).toContain('Cash $400');
+
+    const adaAssignment = dialog?.querySelector('.assignment-card');
+    const pumpsButton = [
+      ...(adaAssignment?.querySelectorAll<HTMLButtonElement>('button') ?? []),
+    ].find((button) => button.textContent === 'Pumps');
+    expect(pumpsButton).toBeDefined();
+    expect(pumpsButton?.getAttribute('aria-label')).toBe('Assign Ada to pumps');
+    if (pumpsButton === undefined) throw new Error('Pump assignment is missing.');
+    act(() => {
+      pumpsButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(adaAssignment?.textContent).toContain('Clear assignment');
+    expect(container.querySelector('[role="status"]')?.textContent).toContain(
+      'Crew assignment accepted.',
+    );
+
+    act(() => root.unmount());
+  });
 });

@@ -1,16 +1,15 @@
 # Known Issues and Risks
 
-Last updated: 2026-08-07
+Last updated: 2026-08-08
 
 ## Active implementation limitations
 
 ### KI-001 — Current UI is a non-interactive systems mock
 
 - **Severity:** Expected / P0 roadmap gap
-- **Status:** Open
-- **Symptoms:** Authoritative job assignment now exists headlessly, but the visible crew assignment controls, power allocation, camera help, threat tags, and station objects are not connected to those gameplay commands.
-- **Impact:** The screen must not be described as a playable slice.
-- **Plan:** GS-013/014 established authoritative occupancy, movement, and jobs; the next player-facing workflow and GS-020 through GS-035 connect operations, power, combat, and reports through the GS-011 command/event foundation.
+- **Status:** Partially resolved 2026-08-08
+- **Progress:** GS-020 connects routine customers, pump/checkout staffing, prices, inventory orders, queue totals, served totals, resources, receipts, and event history through the authoritative command/event foundation.
+- **Remaining boundary:** Power allocation, camera controls, threat tags, and most station objects remain previews until GS-022 and GS-030 through GS-035. The current build has a playable day-business loop, not a complete vertical slice.
 
 ### KI-002 — Simulation clock is not yet a replay-grade fixed-step engine
 
@@ -56,9 +55,9 @@ Last updated: 2026-08-07
 
 - **Severity:** Low
 - **Status:** Open
-- **Symptoms:** React, Tauri's title/recovery adapters, the deterministic simulation/persistence foundation, and the direct Three.js prototype currently produce one 878.97 kB minified JavaScript asset (235.68 kB gzip).
+- **Symptoms:** React, Tauri's title/recovery adapters, the deterministic simulation/persistence/business foundation, and the direct Three.js prototype currently produce one 901.60 kB minified JavaScript asset (241.54 kB gzip), which now triggers Vite's 900 kB advisory.
 - **Impact:** Startup is acceptable for the scaffold but may grow without an asset/scene loading boundary.
-- **Plan:** Measure startup and target scenes in GS-056, then split by actual loading phases rather than speculative package boundaries. Vite's advisory threshold is temporarily 900 kB so this known baseline does not appear as an unexplained build warning.
+- **Plan:** Add an intentional scene/platform loading boundary before the bundle grows further, then measure startup and target scenes in GS-056. Keep the advisory visible until a measured split resolves it rather than raising the threshold again.
 
 ### KI-008 — Local Rust toolchain is too old for the resolved desktop dependencies
 
@@ -81,13 +80,13 @@ Last updated: 2026-08-07
 - **Resolution:** GS-017 removed the fixed minimum viewport, introduced deliberate desktop/tablet/mobile composition, raised readable label sizing, extracted the browser simulation runtime from `App`, added semantic meters and grouped pressed-state time controls, and established one accessible dialog/drawer primitive used by the station guide and authoritative event log. Focus containment/return, inert background, Escape, backdrop dismissal, body-scroll restoration, and 320–1920 px layouts are verified.
 - **Remaining boundary:** GS-005 still owns licensed repository typography. GS-018 owns deterministic phase/Beacon visual fixtures and Three.js consistency; GS-054 remains the representative-art gate.
 
-### KI-011 — Authoritative movement is not yet projected into rendering or controls
+### KI-011 — Authoritative movement is not yet projected into rendering
 
 - **Severity:** Expected / P0 roadmap gap
 - **Status:** Open
-- **Symptoms:** Great Plains occupancy, interaction cells, employee routes, and job progress are deterministic and replayable, but the procedural station scene is not generated from the grid and employees/routes are not visible or controllable through the current HUD.
-- **Impact:** The simulation proves domain and persistence contracts but does not yet provide player interaction or visible movement/placement feedback.
-- **Plan:** Expose jobs through the first player-facing grid workflow after GS-015/016 persistence foundations; GS-022/023 add construction and construction-time path validation. Keep presentation projection downstream so placeholder art does not dictate domain geometry.
+- **Symptoms:** Great Plains occupancy, interaction cells, employee routes, and job progress are deterministic and replayable. GS-020 exposes pump/checkout assignments and cancellation in the shift board, but employees and routes are not rendered in the procedural station scene, which is not yet generated from authoritative occupancy.
+- **Impact:** Staffing is playable and inspectable in text, but travel and placement feedback are not visible in the world.
+- **Plan:** Project employees and selection/path feedback downstream of simulation state; GS-022/023 add construction and construction-time path validation without letting placeholder art dictate domain geometry.
 
 ## Product and design risks
 

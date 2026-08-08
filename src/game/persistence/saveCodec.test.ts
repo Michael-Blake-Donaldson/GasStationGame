@@ -5,9 +5,10 @@ import {
   decodeGameSave,
   dispatchSimulationCommand,
   encodeGameSave,
+  greatPlainsSimulationContext,
   hashSimulationState,
 } from '../scenarios/greatPlains';
-import { advanceSimulationByClockUnits } from '../simulation/advanceSimulation';
+import { advanceSimulationByClockUnits as advanceByClockUnitsWithContext } from '../simulation/advanceSimulation';
 import { CLOCK_UNITS_PER_MINUTE, phaseForClockUnit } from '../simulation/clock';
 import { drawSimulationRandomInteger } from '../simulation/random';
 import type { SimulationState } from '../simulation/types';
@@ -17,6 +18,12 @@ import {
 } from '../serialization/canonicalJson';
 import type { GameSaveSnapshot, SaveIssueCode } from './saveCodec';
 import initialSaveFixture from './fixtures/save-v1-initial.json?raw';
+
+const advanceSimulationByClockUnits = (
+  state: SimulationState,
+  clockUnits: number,
+  context = greatPlainsSimulationContext,
+) => advanceByClockUnitsWithContext(state, clockUnits, context);
 
 const campaign = createInitialCampaignState('great-plains');
 
@@ -79,13 +86,108 @@ const runningInitialState = (): SimulationState =>
     sequence: 0,
   }).state;
 
+const staffedBusinessState = (clockUnits: number): SimulationState => {
+  let state = createInitialState();
+  state = dispatchSimulationCommand(state, {
+    atTick: 0,
+    command: {
+      employeeId: 'employee-ada',
+      jobId: 'staff-checkout',
+      type: 'job.assign',
+    },
+    id: 'save-test-checkout',
+    sequence: 0,
+  }).state;
+  state = dispatchSimulationCommand(state, {
+    atTick: 0,
+    command: {
+      employeeId: 'employee-bo',
+      jobId: 'staff-pumps',
+      type: 'job.assign',
+    },
+    id: 'save-test-pumps',
+    sequence: 1,
+  }).state;
+  return advanceSimulationByClockUnits(state, clockUnits, greatPlainsSimulationContext);
+};
+
 describe('versioned game save codec', () => {
-  it('matches the frozen initial v1 save fixture', async () => {
+  it('loads the frozen v1 fixture and writes current v2 saves', () => {
     const serialized = encodeGameSave(snapshotFor(createInitialState(), 0, 0));
-    await expect(serialized).toMatchFileSnapshot('./fixtures/save-v1-initial.json');
+    expect(JSON.parse(serialized)).toMatchObject({
+      schemaVersion: 2,
+      station: { version: 6 },
+    });
     expect(expectSuccessfulLoad(initialSaveFixture).simulation).toEqual(
       createInitialState(),
     );
+    expect(expectSuccessfulLoad(serialized).simulation).toEqual(createInitialState());
+  });
+
+  it('migrates later v1 saves without preserving placeholder daytime income', () => {
+    const migrated = expectSuccessfulLoad(
+      mutateSave(initialSaveFixture, (document) => {
+        const station = asRecord(document.station, 'station');
+        station.absoluteClockUnit = 9 * 60 * CLOCK_UNITS_PER_MINUTE;
+        station.resources = {
+          ammunition: 36,
+          cash: 432,
+          food: 47,
+          fuel: 158,
+          power: 100,
+          scrap: 32,
+        };
+        station.eventLedger = [
+          ...(station.eventLedger as Record<string, unknown>[]),
+          {
+            absoluteClockUnit: 9 * 60 * CLOCK_UNITS_PER_MINUTE,
+            changes: [
+              {
+                after: 432,
+                appliedDelta: 12,
+                before: 420,
+                requestedDelta: 12,
+                resource: 'cash',
+              },
+              {
+                after: 47,
+                appliedDelta: -1,
+                before: 48,
+                requestedDelta: -1,
+                resource: 'food',
+              },
+              {
+                after: 158,
+                appliedDelta: -2,
+                before: 160,
+                requestedDelta: -2,
+                resource: 'fuel',
+              },
+            ],
+            minute: 9 * 60,
+            reason: 'day-hourly-flow',
+            sequence: 1,
+            tick: 0,
+            type: 'resources.changed',
+          },
+        ];
+        station.nextEventSequence = 2;
+      }),
+    );
+
+    expect(migrated.simulation).toMatchObject({
+      business: {
+        activeCustomers: [],
+        completedCustomerCount: 0,
+        nextCustomerSequence: 0,
+        trafficBaselineReason: 'legacy-save-migration',
+        trafficStartsAtClockUnit: 9 * 60 * CLOCK_UNITS_PER_MINUTE + 1,
+      },
+      nextEventSequence: 1,
+      resources: createInitialState().resources,
+      scenarioVersion: 4,
+    });
+    expect(migrated.simulation.eventLedger).toHaveLength(1);
   });
 
   it.each([
@@ -155,6 +257,41 @@ describe('versioned game save codec', () => {
     ).toEqual(midWork);
   });
 
+  it('preserves a customer mid-service and resumes deterministically', () => {
+    const midService = staffedBusinessState(61 * CLOCK_UNITS_PER_MINUTE);
+    expect(midService.business.activeCustomers[0]?.stage.type).toBe('pump-service');
+
+    const loaded = expectSuccessfulLoad(encodeGameSave(snapshotFor(midService, 2, 9)));
+    expect(loaded.simulation).toEqual(midService);
+
+    const originalNext = advanceSimulationByClockUnits(
+      midService,
+      3 * CLOCK_UNITS_PER_MINUTE,
+      greatPlainsSimulationContext,
+    );
+    const loadedNext = advanceSimulationByClockUnits(
+      loaded.simulation,
+      3 * CLOCK_UNITS_PER_MINUTE,
+      greatPlainsSimulationContext,
+    );
+    expect(loadedNext).toEqual(originalNext);
+    expect(hashSimulationState(loadedNext)).toBe(hashSimulationState(originalNext));
+  });
+
+  it('round-trips inventory purchases and completed customer sales', () => {
+    const sold = staffedBusinessState(63 * CLOCK_UNITS_PER_MINUTE);
+    const ordered = dispatchSimulationCommand(sold, {
+      atTick: sold.tick,
+      command: { product: 'fuel', quantity: 5, type: 'inventory.order' },
+      id: 'save-test-order',
+      sequence: 2,
+    }).state;
+
+    expect(
+      expectSuccessfulLoad(encodeGameSave(snapshotFor(ordered))).simulation,
+    ).toEqual(ordered);
+  });
+
   it('round-trips a terminal slice without retaining transient clock work', () => {
     const running = dispatchSimulationCommand(createInitialState(1987, 1), {
       atTick: 0,
@@ -172,6 +309,23 @@ describe('versioned game save codec', () => {
     expect(loaded.simulation.isSliceComplete).toBe(true);
     expect(loaded.simulation.clockStepRemainderTimeUnits).toBe(0);
   });
+
+  it('round-trips after scheduled resources are fully depleted', () => {
+    const running = dispatchSimulationCommand(createInitialState(1987, 4), {
+      atTick: 0,
+      command: { mode: 'normal', type: 'time-mode.set' },
+      id: 'start-four-night-slice',
+      sequence: 0,
+    }).state;
+    const terminal = advanceSimulationByClockUnits(
+      running,
+      94 * 60 * CLOCK_UNITS_PER_MINUTE,
+    );
+    const loaded = expectSuccessfulLoad(encodeGameSave(snapshotFor(terminal)));
+
+    expect(terminal.resources).toMatchObject({ ammunition: 0, power: 0 });
+    expect(loaded.simulation).toEqual(terminal);
+  }, 15_000);
 
   it('round-trips automatic paused-to-slow conversion at the night boundary', () => {
     const night = advanceSimulationByClockUnits(
@@ -271,7 +425,7 @@ describe('versioned game save codec', () => {
       mutateSave(
         valid,
         (document) => {
-          document.schemaVersion = 2;
+          document.schemaVersion = 3;
         },
         false,
       ),
@@ -397,6 +551,50 @@ describe('versioned game save codec', () => {
       mutateSave(valid, (document) => {
         const station = asRecord(document.station, 'station');
         asRecord(station.resources, 'station.resources').cash = 421;
+      }),
+      'semantic-invariant-failed',
+    );
+
+    const business = encodeGameSave(
+      snapshotFor(staffedBusinessState(63 * CLOCK_UNITS_PER_MINUTE)),
+    );
+    expectFailureCode(
+      mutateSave(business, (document) => {
+        const station = asRecord(document.station, 'station');
+        const ledger = station.eventLedger as Record<string, unknown>[];
+        const sale = ledger.find((event) => event.type === 'sale.completed');
+        if (sale === undefined) throw new Error('Sale event is missing.');
+        sale.revenue = 25;
+      }),
+      'semantic-invariant-failed',
+    );
+    expectFailureCode(
+      mutateSave(business, (document) => {
+        const station = asRecord(document.station, 'station');
+        const businessState = asRecord(station.business, 'station.business');
+        asRecord(businessState.prices, 'station.business.prices').fuel = 7;
+      }),
+      'semantic-invariant-failed',
+    );
+
+    const firstArrival = advanceSimulationByClockUnits(
+      createInitialState(),
+      60 * CLOCK_UNITS_PER_MINUTE,
+    );
+    expectFailureCode(
+      mutateSave(encodeGameSave(snapshotFor(firstArrival)), (document) => {
+        const station = asRecord(document.station, 'station');
+        const businessState = asRecord(station.business, 'station.business');
+        businessState.activeCustomers = [];
+        businessState.nextCustomerSequence = 0;
+        const ledger = (station.eventLedger as Record<string, unknown>[]).filter(
+          (event) => event.type !== 'customer.arrived',
+        );
+        ledger.forEach((event, sequence) => {
+          event.sequence = sequence;
+        });
+        station.eventLedger = ledger;
+        station.nextEventSequence = ledger.length;
       }),
       'semantic-invariant-failed',
     );

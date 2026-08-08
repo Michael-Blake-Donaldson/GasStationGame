@@ -15,12 +15,12 @@ import {
 import type { SimulationContext } from './scenario';
 import type { DomainEvent, SimulationState } from './types';
 
-export interface ScenarioReplayV3 {
+export interface ScenarioReplayV4 {
   readonly commands: readonly CommandEnvelope[];
   readonly gridDefinitionId: string;
   readonly gridDefinitionVersion: number;
   readonly replayKind: 'scenario';
-  readonly replayVersion: 3;
+  readonly replayVersion: 4;
   readonly rng: {
     readonly algorithm: typeof SEEDED_RANDOM_ALGORITHM;
     readonly seed: number;
@@ -135,10 +135,10 @@ const validateCommonFields = (
 const validateScenarioReplay: (
   replay: unknown,
   context: SimulationContext,
-) => asserts replay is ScenarioReplayV3 = (replay, context) => {
+) => asserts replay is ScenarioReplayV4 = (replay, context) => {
   const scenarioDefinition = context.scenario;
   if (!isRecord(replay)) throw new RangeError('Scenario replay must be an object.');
-  if (replay.replayKind !== 'scenario' || replay.replayVersion !== 3) {
+  if (replay.replayKind !== 'scenario' || replay.replayVersion !== 4) {
     throw new RangeError('Unsupported scenario replay format.');
   }
   if (
@@ -187,7 +187,7 @@ const orderedCommands = (
   );
 
 export const runScenarioReplay = (
-  replay: ScenarioReplayV3,
+  replay: ScenarioReplayV4,
   context: SimulationContext,
 ): ScenarioReplayResult => {
   validateScenarioReplay(replay, context);
@@ -211,7 +211,7 @@ export const runScenarioReplay = (
       commandIndex += 1;
     }
 
-    const advanced = advanceSimulationStep(state);
+    const advanced = advanceSimulationStep(state, context);
     if (advanced === state) break;
     state = advanced;
   }
@@ -254,7 +254,7 @@ export const runClockReplay = (
       gridDefinitionId: scenarioDefinition.stationGridDefinition.id,
       gridDefinitionVersion: scenarioDefinition.stationGridDefinition.version,
       replayKind: 'scenario',
-      replayVersion: 3,
+      replayVersion: 4,
       rng: {
         algorithm: SEEDED_RANDOM_ALGORITHM,
         seed: replay.seed,

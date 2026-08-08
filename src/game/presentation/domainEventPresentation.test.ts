@@ -4,6 +4,7 @@ import { CLOCK_UNITS_PER_MINUTE } from '../simulation/clock';
 import {
   createInitialState,
   dispatchSimulationCommand,
+  greatPlainsSimulationContext,
 } from '../scenarios/greatPlains';
 import {
   presentCommandReceipt,
@@ -16,6 +17,7 @@ describe('domain event presentation', () => {
     const state = advanceSimulationByClockUnits(
       createInitialState(),
       12 * 60 * CLOCK_UNITS_PER_MINUTE,
+      greatPlainsSimulationContext,
     );
     const ledgerLength = state.eventLedger.length;
     const recent = selectRecentDomainEvents(state.eventLedger, 8);

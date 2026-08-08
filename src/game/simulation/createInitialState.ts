@@ -8,6 +8,7 @@ import {
 } from './random';
 import type { ScenarioDefinition } from './scenario';
 import type { SimulationState } from './types';
+import { createInitialBusinessState } from './business';
 
 export const createInitialState = (
   scenarioDefinition: ScenarioDefinition,
@@ -76,6 +77,7 @@ export const createInitialState = (
 
   return {
     absoluteClockUnit,
+    business: createInitialBusinessState(scenarioDefinition.business),
     clockStepRemainderTimeUnits: 0,
     completedNights: 0,
     employees,

@@ -3,14 +3,14 @@ import {
   canonicalizeCampaignState,
   type CampaignStateV1,
 } from '../campaign/campaignState';
-import {
-  createSimulationCheckpoint,
-  SIMULATION_CHECKPOINT_VERSION,
-} from '../simulation/checkpoint';
+import { createSimulationCheckpoint } from '../simulation/checkpoint';
 import { SEEDED_RANDOM_ALGORITHM, SEEDED_RANDOM_VERSION } from '../simulation/random';
 import type { SimulationContext } from '../simulation/scenario';
-import type { SimulationState } from '../simulation/types';
+import type { DomainEvent, SimulationState } from '../simulation/types';
 import { assertSimulationState } from '../simulation/validation';
+import { createInitialBusinessState } from '../simulation/business';
+import { createInitialState } from '../simulation/createInitialState';
+import { CLOCK_UNITS_PER_MINUTE } from '../simulation/clock';
 import {
   hashCanonicalJson,
   stringifyCanonicalJson,
@@ -23,9 +23,11 @@ import {
   SAVE_SETTINGS_VERSION,
   campaignStateV1Schema,
   saveDocumentV1Schema,
-  savePayloadV1Schema,
+  saveDocumentV2Schema,
+  savePayloadV2Schema,
   type SaveDocumentV1,
-  type SavePayloadV1,
+  type SaveDocumentV2,
+  type SavePayloadV2,
 } from './saveSchema';
 
 export interface GameSaveContext {
@@ -89,7 +91,7 @@ const assertNonNegativeSafeInteger = (value: number, name: string): void => {
 const createPayload = (
   snapshot: GameSaveSnapshot,
   context: GameSaveContext,
-): SavePayloadV1 => {
+): SavePayloadV2 => {
   assertNonNegativeSafeInteger(snapshot.nextCommandSequence, 'nextCommandSequence');
   assertNonNegativeSafeInteger(snapshot.saveSequence, 'saveSequence');
   const campaign = canonicalizeCampaignState(
@@ -122,7 +124,7 @@ const createPayload = (
     settings: { schemaVersion: SAVE_SETTINGS_VERSION },
     station,
   };
-  return savePayloadV1Schema.parse(payload);
+  return savePayloadV2Schema.parse(payload);
 };
 
 export const encodeGameSave = (
@@ -130,37 +132,82 @@ export const encodeGameSave = (
   context: GameSaveContext,
 ): string => {
   const payload = createPayload(snapshot, context);
-  const document: SaveDocumentV1 = {
+  const document: SaveDocumentV2 = {
     ...payload,
     checksum: {
       algorithm: SAVE_CHECKSUM_ALGORITHM,
       value: hashCanonicalJson(payload),
     },
   };
-  return stringifyCanonicalJson(saveDocumentV1Schema.parse(document));
+  return stringifyCanonicalJson(saveDocumentV2Schema.parse(document));
 };
 
 const restoreSimulationState = (
-  station: SaveDocumentV1['station'],
-): SimulationState => ({
-  absoluteClockUnit: station.absoluteClockUnit,
-  clockStepRemainderTimeUnits: station.clockStepRemainderTimeUnits,
-  completedNights: station.completedNights,
-  employees: station.employees,
-  eventLedger: station.eventLedger,
-  isSliceComplete: station.isSliceComplete,
-  nextEventSequence: station.nextEventSequence,
-  phase: station.phase,
-  resources: station.resources,
-  rng: station.rng,
-  scenarioId: station.scenarioId,
-  scenarioVersion: station.scenarioVersion,
-  seed: station.seed,
-  stationOccupancy: station.stationOccupancy,
-  targetNightCount: station.targetNightCount,
-  tick: station.tick,
-  timeMode: station.timeMode,
-});
+  station: SaveDocumentV1['station'] | SaveDocumentV2['station'],
+  context: GameSaveContext,
+): SimulationState => {
+  const isLegacyV1 = !('business' in station);
+  const eventLedger: readonly DomainEvent[] = isLegacyV1
+    ? station.eventLedger
+        .filter(
+          (event) =>
+            event.type !== 'resources.changed' || event.reason !== 'day-hourly-flow',
+        )
+        .map((event, sequence): DomainEvent =>
+          event.type === 'simulation.started'
+            ? {
+                ...event,
+                scenarioVersion: context.simulation.scenario.version,
+                sequence,
+              }
+            : { ...event, sequence },
+        )
+    : station.eventLedger;
+  const initialResources = createInitialState(
+    context.simulation.scenario,
+    station.seed,
+    station.targetNightCount,
+  ).resources;
+  return {
+    absoluteClockUnit: station.absoluteClockUnit,
+    business: isLegacyV1
+      ? createInitialBusinessState(
+          context.simulation.scenario.business,
+          station.absoluteClockUnit === 8 * 60 * CLOCK_UNITS_PER_MINUTE
+            ? station.absoluteClockUnit
+            : station.absoluteClockUnit + 1,
+          station.absoluteClockUnit === 8 * 60 * CLOCK_UNITS_PER_MINUTE
+            ? 'scenario-start'
+            : 'legacy-save-migration',
+        )
+      : station.business,
+    clockStepRemainderTimeUnits: station.clockStepRemainderTimeUnits,
+    completedNights: station.completedNights,
+    employees: station.employees,
+    eventLedger,
+    isSliceComplete: station.isSliceComplete,
+    nextEventSequence: isLegacyV1 ? eventLedger.length : station.nextEventSequence,
+    phase: station.phase,
+    resources: isLegacyV1
+      ? {
+          ...station.resources,
+          cash: initialResources.cash,
+          food: initialResources.food,
+          fuel: initialResources.fuel,
+        }
+      : station.resources,
+    rng: station.rng,
+    scenarioId: station.scenarioId,
+    scenarioVersion: isLegacyV1
+      ? context.simulation.scenario.version
+      : station.scenarioVersion,
+    seed: station.seed,
+    stationOccupancy: station.stationOccupancy,
+    targetNightCount: station.targetNightCount,
+    tick: station.tick,
+    timeMode: station.timeMode,
+  };
+};
 
 const headerFailure = (value: unknown): SaveLoadResult | undefined => {
   if (!isRecord(value)) {
@@ -173,7 +220,7 @@ const headerFailure = (value: unknown): SaveLoadResult | undefined => {
       'Save format identifier is unsupported.',
     );
   }
-  if (value.schemaVersion !== SAVE_SCHEMA_VERSION) {
+  if (value.schemaVersion !== 1 && value.schemaVersion !== SAVE_SCHEMA_VERSION) {
     return failure(
       'unsupported-save-version',
       'schemaVersion',
@@ -181,7 +228,8 @@ const headerFailure = (value: unknown): SaveLoadResult | undefined => {
     );
   }
   const station = value.station;
-  if (isRecord(station) && station.version !== SIMULATION_CHECKPOINT_VERSION) {
+  const expectedCheckpointVersion = value.schemaVersion === 1 ? 5 : 6;
+  if (isRecord(station) && station.version !== expectedCheckpointVersion) {
     return failure(
       'unsupported-checkpoint-version',
       'station.version',
@@ -204,10 +252,11 @@ const headerFailure = (value: unknown): SaveLoadResult | undefined => {
 };
 
 const contentFailure = (
-  document: SaveDocumentV1,
+  document: SaveDocumentV1 | SaveDocumentV2,
   context: GameSaveContext,
 ): SaveLoadResult | undefined => {
   const scenario = context.simulation.scenario;
+  const expectedScenarioVersion = document.schemaVersion === 1 ? 3 : scenario.version;
   if (
     document.content.scenarioId !== scenario.id ||
     document.content.gridDefinitionId !== scenario.stationGridDefinition.id ||
@@ -223,9 +272,9 @@ const contentFailure = (
     );
   }
   if (
-    document.content.scenarioVersion !== scenario.version ||
+    document.content.scenarioVersion !== expectedScenarioVersion ||
     document.content.gridDefinitionVersion !== scenario.stationGridDefinition.version ||
-    document.station.scenarioVersion !== scenario.version ||
+    document.station.scenarioVersion !== expectedScenarioVersion ||
     document.station.stationOccupancy.gridDefinitionVersion !==
       scenario.stationGridDefinition.version
   ) {
@@ -252,7 +301,10 @@ export const decodeGameSave = (
   const invalidHeader = headerFailure(parsed);
   if (invalidHeader !== undefined) return invalidHeader;
 
-  const structural = saveDocumentV1Schema.safeParse(parsed);
+  const structural =
+    isRecord(parsed) && parsed.schemaVersion === 1
+      ? saveDocumentV1Schema.safeParse(parsed)
+      : saveDocumentV2Schema.safeParse(parsed);
   if (!structural.success) {
     return {
       issues: structural.error.issues.map((issue) => ({
@@ -285,7 +337,7 @@ export const decodeGameSave = (
     );
   }
 
-  const simulation = restoreSimulationState(document.station);
+  const simulation = restoreSimulationState(document.station, context);
   try {
     assertSimulationState(context.simulation, simulation);
   } catch (error) {

@@ -1,15 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { advanceSimulationByClockUnits } from './advanceSimulation';
+import { advanceSimulationByClockUnits as advanceByClockUnitsWithContext } from './advanceSimulation';
 import { SIMULATION_CHECKPOINT_VERSION, hashDomainEventLedger } from './checkpoint';
 import {
   createInitialState,
   createSimulationCheckpoint,
   dispatchSimulationCommand,
+  greatPlainsSimulationContext,
   hashSimulationState,
 } from '../scenarios/greatPlains';
 import { CLOCK_UNITS_PER_MINUTE } from './clock';
 import { drawSimulationRandomInteger } from './random';
 import type { ResourceChange } from './types';
+
+const advanceSimulationByClockUnits = (
+  state: ReturnType<typeof createInitialState>,
+  clockUnits: number,
+) => advanceByClockUnitsWithContext(state, clockUnits, greatPlainsSimulationContext);
 
 describe('simulation checkpoint hash', () => {
   it('serializes checkpoint version 5 with exact RNG, station, and workforce state', () => {
@@ -18,11 +24,11 @@ describe('simulation checkpoint hash', () => {
     const checkpoint = createSimulationCheckpoint(advanced);
     const restored: unknown = JSON.parse(JSON.stringify(checkpoint));
 
-    expect(SIMULATION_CHECKPOINT_VERSION).toBe(5);
+    expect(SIMULATION_CHECKPOINT_VERSION).toBe(6);
     expect(checkpoint.rng).toEqual(advanced.rng);
     expect(checkpoint).toMatchObject({
       scenarioId: 'great-plains',
-      scenarioVersion: 3,
+      scenarioVersion: 4,
       stationOccupancy: {
         gridDefinitionId: 'great-plains-station-grid',
         gridDefinitionVersion: 1,
@@ -161,7 +167,7 @@ describe('simulation checkpoint hash', () => {
   it('creates a ledger snapshot detached from state and nested event payloads', () => {
     const state = advanceSimulationByClockUnits(
       createInitialState(),
-      60 * CLOCK_UNITS_PER_MINUTE,
+      11 * 60 * CLOCK_UNITS_PER_MINUTE,
     );
     const checkpoint = createSimulationCheckpoint(state);
     const checkpointLedger = checkpoint.eventLedger;

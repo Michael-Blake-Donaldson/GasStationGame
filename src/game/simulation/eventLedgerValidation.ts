@@ -1,5 +1,10 @@
 import { applyHourlyFlow } from './advanceSimulation';
 import {
+  createInitialBusinessState,
+  demandForCustomerSequence,
+  isScheduledCustomerArrival,
+} from './business';
+import {
   CLOCK_UNITS_PER_MINUTE,
   effectiveTimeMode,
   phaseForClockUnit,
@@ -126,46 +131,97 @@ const assertResourceHistory = (
     state.seed,
     state.targetNightCount,
   ).resources;
-  const expectedEvents: {
+  const expectedFlows: {
     readonly absoluteClockUnit: number;
-    readonly changes: readonly ResourceChange[];
     readonly reason: 'day-hourly-flow' | 'night-hourly-flow';
   }[] = [];
   const startMinute = 8 * 60;
   const finalMinute = wholeMinuteForClockUnit(state.absoluteClockUnit);
+  let scheduledResources = resources;
   for (let minute = startMinute + 1; minute <= finalMinute; minute += 1) {
     if (minute % 60 !== 0) continue;
     const absoluteClockUnit = minute * CLOCK_UNITS_PER_MINUTE;
     const phase = phaseForClockUnit(absoluteClockUnit);
-    const flow = applyHourlyFlow(resources, phase);
-    resources = flow.resources;
+    const flow = applyHourlyFlow(scheduledResources, phase);
+    scheduledResources = flow.resources;
     if (flow.changes.length > 0) {
-      expectedEvents.push({
+      expectedFlows.push({
         absoluteClockUnit,
-        changes: flow.changes,
         reason: phase === 'night' ? 'night-hourly-flow' : 'day-hourly-flow',
       });
     }
   }
-  const actualEvents = state.eventLedger.filter(
-    (event): event is Extract<DomainEvent, { type: 'resources.changed' }> =>
-      event.type === 'resources.changed',
-  );
-  if (actualEvents.length !== expectedEvents.length) {
-    throw new RangeError('Resource events do not cover every scheduled flow.');
+  let nextExpectedFlowIndex = 0;
+  for (const event of state.eventLedger) {
+    if (event.type === 'resources.changed') {
+      const expected = expectedFlows[nextExpectedFlowIndex];
+      const phase = phaseForClockUnit(event.absoluteClockUnit);
+      const flow = applyHourlyFlow(resources, phase);
+      if (expected === undefined) {
+        throw new RangeError('Resource event does not match scheduled flow.');
+      }
+      if (
+        event.absoluteClockUnit !== expected.absoluteClockUnit ||
+        event.reason !== expected.reason ||
+        !resourceChangesEqual(event.changes, flow.changes)
+      ) {
+        throw new RangeError('Resource event does not match scheduled flow.');
+      }
+      resources = flow.resources;
+      nextExpectedFlowIndex += 1;
+      continue;
+    }
+    if (event.type === 'sale.completed') {
+      const expectedRevenue = event.soldUnits * event.unitPrice;
+      const expectedCashAfter = resources.cash + expectedRevenue;
+      const expectedStockAfter = resources[event.product] - event.soldUnits;
+      if (
+        !Number.isSafeInteger(expectedRevenue) ||
+        !Number.isSafeInteger(expectedCashAfter) ||
+        event.soldUnits > event.requestedUnits ||
+        event.cashBefore !== resources.cash ||
+        event.cashAfter !== expectedCashAfter ||
+        event.revenue !== expectedRevenue ||
+        event.stockBefore !== resources[event.product] ||
+        event.stockAfter !== expectedStockAfter ||
+        expectedStockAfter < 0
+      ) {
+        throw new RangeError('Sale event does not reconcile with resource history.');
+      }
+      resources = {
+        ...resources,
+        cash: expectedCashAfter,
+        [event.product]: expectedStockAfter,
+      };
+      continue;
+    }
+    if (event.type === 'inventory.ordered') {
+      const expectedTotalCost = event.quantity * event.wholesaleUnitCost;
+      const expectedCashAfter = resources.cash - expectedTotalCost;
+      const expectedStockAfter = resources[event.product] + event.quantity;
+      if (
+        !Number.isSafeInteger(expectedTotalCost) ||
+        !Number.isSafeInteger(expectedStockAfter) ||
+        event.totalCost !== expectedTotalCost ||
+        event.cashBefore !== resources.cash ||
+        event.cashAfter !== expectedCashAfter ||
+        event.stockBefore !== resources[event.product] ||
+        event.stockAfter !== expectedStockAfter ||
+        expectedCashAfter < 0
+      ) {
+        throw new RangeError(
+          'Inventory event does not reconcile with resource history.',
+        );
+      }
+      resources = {
+        ...resources,
+        cash: expectedCashAfter,
+        [event.product]: expectedStockAfter,
+      };
+    }
   }
-  for (const [index, event] of actualEvents.entries()) {
-    const expected = expectedEvents[index];
-    if (expected === undefined) {
-      throw new RangeError('Resource event does not match scheduled flow.');
-    }
-    if (
-      event.absoluteClockUnit !== expected.absoluteClockUnit ||
-      event.reason !== expected.reason ||
-      !resourceChangesEqual(event.changes, expected.changes)
-    ) {
-      throw new RangeError('Resource event does not match scheduled flow.');
-    }
+  if (nextExpectedFlowIndex !== expectedFlows.length) {
+    throw new RangeError('Resource events do not cover every scheduled flow.');
   }
   for (const key of Object.keys(resources) as (keyof Resources)[]) {
     if (state.resources[key] !== resources[key]) {
@@ -210,6 +266,147 @@ const assertTimeModeHistory = (state: SimulationState): void => {
   }
   if (mode !== state.timeMode) {
     throw new RangeError('Final time mode does not reconcile with the event ledger.');
+  }
+};
+
+interface TrackedCustomer {
+  readonly expectedProducts: readonly ('food' | 'fuel')[];
+  readonly sequence: number;
+  nextProductIndex: number;
+  revenue: number;
+  status: 'active' | 'completed';
+}
+
+const assertBusinessHistory = (
+  context: SimulationContext,
+  state: SimulationState,
+): void => {
+  const definition = context.scenario.business;
+  const initialBusiness = createInitialBusinessState(definition);
+  const prices = { ...initialBusiness.prices };
+  const customers = new Map<string, TrackedCustomer>();
+  let nextCustomerSequence = 0;
+  let completedCustomerCount = 0;
+
+  for (const event of state.eventLedger) {
+    if (event.type === 'customer.arrived') {
+      const demand = demandForCustomerSequence(definition, nextCustomerSequence);
+      const customerId = `routine-customer-${String(nextCustomerSequence)}`;
+      if (
+        event.customerId !== customerId ||
+        event.foodUnitsRequested !== demand.foodUnitsRequested ||
+        event.fuelUnitsRequested !== demand.fuelUnitsRequested ||
+        !isScheduledCustomerArrival(definition, event.absoluteClockUnit) ||
+        customers.has(customerId)
+      ) {
+        throw new RangeError('Customer arrival does not match authored traffic.');
+      }
+      customers.set(customerId, {
+        expectedProducts: demand.foodUnitsRequested > 0 ? ['fuel', 'food'] : ['fuel'],
+        nextProductIndex: 0,
+        revenue: 0,
+        sequence: nextCustomerSequence,
+        status: 'active',
+      });
+      nextCustomerSequence += 1;
+      continue;
+    }
+    if (event.type === 'sale.completed') {
+      const customer = customers.get(event.customerId);
+      const expectedProduct = customer?.expectedProducts[customer.nextProductIndex];
+      const demand =
+        customer === undefined
+          ? undefined
+          : demandForCustomerSequence(definition, customer.sequence);
+      const expectedRequestedUnits =
+        event.product === 'fuel'
+          ? demand?.fuelUnitsRequested
+          : demand?.foodUnitsRequested;
+      if (customer === undefined) {
+        throw new RangeError('Sale event does not match its customer lifecycle.');
+      }
+      if (
+        customer.status !== 'active' ||
+        expectedProduct !== event.product ||
+        event.requestedUnits !== expectedRequestedUnits ||
+        event.unitPrice < 1 ||
+        event.unitPrice > definition.products[event.product].maximumUnitPrice
+      ) {
+        throw new RangeError('Sale event does not match its customer lifecycle.');
+      }
+      const revenue = customer.revenue + event.revenue;
+      if (!Number.isSafeInteger(revenue)) {
+        throw new RangeError('Customer revenue exceeds the safe integer range.');
+      }
+      customer.revenue = revenue;
+      customer.nextProductIndex += 1;
+      continue;
+    }
+    if (event.type === 'customer.completed') {
+      const customer = customers.get(event.customerId);
+      if (customer === undefined) {
+        throw new RangeError('Customer completion does not match its sales.');
+      }
+      if (
+        customer.status !== 'active' ||
+        customer.nextProductIndex !== customer.expectedProducts.length ||
+        event.revenue !== customer.revenue
+      ) {
+        throw new RangeError('Customer completion does not match its sales.');
+      }
+      customer.status = 'completed';
+      completedCustomerCount += 1;
+      continue;
+    }
+    if (event.type === 'retail.price-changed') {
+      if (
+        event.previousUnitPrice !== prices[event.product] ||
+        event.currentUnitPrice === event.previousUnitPrice ||
+        event.currentUnitPrice < 1 ||
+        event.currentUnitPrice > definition.products[event.product].maximumUnitPrice
+      ) {
+        throw new RangeError(
+          'Retail price event does not reconcile with price history.',
+        );
+      }
+      prices[event.product] = event.currentUnitPrice;
+    }
+  }
+
+  const activeCustomers = [...customers.values()]
+    .filter(({ status }) => status === 'active')
+    .sort((left, right) => left.sequence - right.sequence);
+  let expectedArrivalCount = 0;
+  const firstTrafficMinute = Math.ceil(
+    state.business.trafficStartsAtClockUnit / CLOCK_UNITS_PER_MINUTE,
+  );
+  const finalTrafficMinute = wholeMinuteForClockUnit(state.absoluteClockUnit);
+  for (let minute = firstTrafficMinute; minute <= finalTrafficMinute; minute += 1) {
+    if (isScheduledCustomerArrival(definition, minute * CLOCK_UNITS_PER_MINUTE)) {
+      expectedArrivalCount += 1;
+    }
+  }
+  if (
+    nextCustomerSequence !== expectedArrivalCount ||
+    nextCustomerSequence !== state.business.nextCustomerSequence ||
+    completedCustomerCount !== state.business.completedCustomerCount ||
+    prices.food !== state.business.prices.food ||
+    prices.fuel !== state.business.prices.fuel ||
+    activeCustomers.length !== state.business.activeCustomers.length
+  ) {
+    throw new RangeError('Final business state does not reconcile with its ledger.');
+  }
+  for (const [index, customer] of activeCustomers.entries()) {
+    const finalCustomer = state.business.activeCustomers[index];
+    if (finalCustomer === undefined) {
+      throw new RangeError('Active customers do not reconcile with their ledger.');
+    }
+    if (
+      finalCustomer.sequence !== customer.sequence ||
+      finalCustomer.revenue !== customer.revenue
+    ) {
+      throw new RangeError('Active customers do not reconcile with their ledger.');
+    }
   }
 };
 
@@ -485,6 +682,7 @@ export const assertEventLedgerSemantics = (
 ): void => {
   assertClockEvents(state);
   assertResourceHistory(context, state);
+  assertBusinessHistory(context, state);
   assertTimeModeHistory(state);
   assertJobHistory(context, state);
 };

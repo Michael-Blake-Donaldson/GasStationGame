@@ -15,7 +15,7 @@ import {
   runClockReplay as runSimulationClockReplay,
   runScenarioReplay as runSimulationScenarioReplay,
   type ClockReplayV1,
-  type ScenarioReplayV3,
+  type ScenarioReplayV4,
 } from '../simulation/replay';
 import {
   GREAT_PLAINS_SCENARIO_ID,
@@ -33,12 +33,13 @@ export type {
   ClockReplayResult,
   ClockReplayV1,
   ScenarioReplayResult,
-  ScenarioReplayV3,
+  ScenarioReplayV4,
   ScenarioReplayStopReason,
 } from '../simulation/replay';
 
 export const greatPlainsStationGrid = greatPlainsRegion.stationGrid;
 export const greatPlainsScenario = {
+  business: greatPlainsRegion.business,
   id: GREAT_PLAINS_SCENARIO_ID,
   initialEmployeePositions: greatPlainsRegion.initialEmployeePositions,
   jobs: greatPlainsRegion.jobs,
@@ -76,7 +77,7 @@ export const encodeGameSave = (snapshot: GameSaveSnapshot) =>
 export const decodeGameSave = (serialized: string) =>
   decodeSave(serialized, greatPlainsSaveContext);
 
-export const runScenarioReplay = (replay: ScenarioReplayV3) =>
+export const runScenarioReplay = (replay: ScenarioReplayV4) =>
   runSimulationScenarioReplay(replay, greatPlainsSimulationContext);
 
 export const runClockReplay = (replay: ClockReplayV1) =>

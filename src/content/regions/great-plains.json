@@ -5,6 +5,34 @@
   "pressures": ["High wind", "Grass fire", "Stampede risk", "Moving horizon lights"],
   "startingThreats": ["Hollow Walkers", "Headlight Men", "Unknown signature creature"],
   "sliceNightCount": 3,
+  "business": {
+    "products": {
+      "fuel": {
+        "baseDemandUnits": 6,
+        "defaultUnitPrice": 4,
+        "demandStepUnits": 2,
+        "demandVariationCount": 4,
+        "maximumUnitPrice": 12,
+        "serviceClockUnits": 80,
+        "wholesaleUnitCost": 2
+      },
+      "food": {
+        "baseDemandUnits": 0,
+        "defaultUnitPrice": 6,
+        "demandStepUnits": 1,
+        "demandVariationCount": 3,
+        "maximumUnitPrice": 20,
+        "serviceClockUnits": 40,
+        "wholesaleUnitCost": 3
+      }
+    },
+    "trafficWindows": [
+      { "startMinute": 540, "endMinute": 690, "intervalMinutes": 12 },
+      { "startMinute": 690, "endMinute": 780, "intervalMinutes": 3 },
+      { "startMinute": 780, "endMinute": 990, "intervalMinutes": 10 },
+      { "startMinute": 990, "endMinute": 1080, "intervalMinutes": 5 }
+    ]
+  },
   "initialEmployeePositions": [
     { "employeeId": "employee-ada", "position": { "x": 10, "z": 18 } },
     { "employeeId": "employee-bo", "position": { "x": 12, "z": 9 } },
@@ -47,6 +75,16 @@
       "id": "open-checkout",
       "targetId": "checkout-counter",
       "workDurationClockUnits": 80
+    },
+    {
+      "id": "staff-checkout",
+      "targetId": "checkout-counter",
+      "workDurationClockUnits": 24000
+    },
+    {
+      "id": "staff-pumps",
+      "targetId": "west-pump-service",
+      "workDurationClockUnits": 24000
     },
     {
       "id": "check-pumps",

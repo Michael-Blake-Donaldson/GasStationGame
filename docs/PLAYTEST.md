@@ -1,6 +1,6 @@
 # Great Plains Playtest Plan
 
-Last updated: 2026-08-07
+Last updated: 2026-08-08
 
 ## Purpose
 
@@ -120,7 +120,7 @@ Record the go/no-go result in `docs/DECISIONS.md`. A no-go returns concrete expe
 
 ## Presentation smoke matrix
 
-Before a playtest build is accepted, inspect the HUD, station guide, and event-history drawer at these effective viewport widths:
+Before a playtest build is accepted, inspect the HUD, station guide, station-operations dialog, and event-history drawer at these effective viewport widths:
 
 | Width        | Expected composition                                                                                           |
 | ------------ | -------------------------------------------------------------------------------------------------------------- |

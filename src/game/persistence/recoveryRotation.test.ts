@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInitialCampaignState } from '../campaign/campaignState';
-import { createInitialState, greatPlainsSaveContext } from '../scenarios/greatPlains';
+import {
+  createInitialState,
+  greatPlainsSaveContext,
+  greatPlainsSimulationContext,
+} from '../scenarios/greatPlains';
 import { advanceSimulationByClockUnits } from '../simulation/advanceSimulation';
 import { drawSimulationRandomInteger } from '../simulation/random';
 import { encodeGameSave, type GameSaveSnapshot } from './saveCodec';
@@ -58,7 +62,11 @@ const campaign = createInitialCampaignState('great-plains');
 const recoverySnapshot = (clockUnits = 0): Omit<GameSaveSnapshot, 'saveSequence'> => ({
   campaign,
   nextCommandSequence: clockUnits,
-  simulation: advanceSimulationByClockUnits(createInitialState(), clockUnits),
+  simulation: advanceSimulationByClockUnits(
+    createInitialState(),
+    clockUnits,
+    greatPlainsSimulationContext,
+  ),
 });
 
 const encodedAtSequence = (saveSequence: number, clockUnits = 0): string =>

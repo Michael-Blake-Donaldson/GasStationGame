@@ -94,6 +94,28 @@ export const presentDomainEvent = (event: DomainEvent): DomainEventPresentation 
       return { message: 'Crew assignment cancelled.', tone: 'warning' };
     case 'job.completed':
       return { message: 'Station work completed.', tone: 'positive' };
+    case 'customer.arrived':
+      return { message: 'A routine customer joined the pump queue.', tone: 'neutral' };
+    case 'sale.completed':
+      return {
+        message: `${String(event.soldUnits)} ${event.product} sold for $${String(event.revenue)}.`,
+        tone: event.soldUnits < event.requestedUnits ? 'warning' : 'positive',
+      };
+    case 'customer.completed':
+      return {
+        message: `Routine customer served for $${String(event.revenue)}.`,
+        tone: 'positive',
+      };
+    case 'retail.price-changed':
+      return {
+        message: `${event.product} price set to $${String(event.currentUnitPrice)}.`,
+        tone: 'neutral',
+      };
+    case 'inventory.ordered':
+      return {
+        message: `${String(event.quantity)} ${event.product} stocked for $${String(event.totalCost)}.`,
+        tone: 'neutral',
+      };
   }
 };
 
@@ -136,6 +158,24 @@ export const presentCommandReceipt = (
         message: 'Assignment rejected: job is already assigned.',
         tone: 'warning',
       };
+    case 'inventory-insufficient-cash':
+      return { message: 'Stock order skipped: insufficient cash.', tone: 'warning' };
+    case 'inventory-ordered':
+      return { message: 'Stock order completed.', tone: 'positive' };
+    case 'inventory-overflow':
+      return {
+        message: 'Stock order skipped: quantity is too large.',
+        tone: 'warning',
+      };
+    case 'retail-closed':
+      return {
+        message: 'Retail changes are available during the day.',
+        tone: 'warning',
+      };
+    case 'retail-price-unchanged':
+      return { message: 'Retail price is already selected.', tone: 'neutral' };
+    case 'retail-price-updated':
+      return { message: 'Retail price updated.', tone: 'neutral' };
     case 'command-scheduled-in-future':
       return {
         message: 'Command rejected: scheduled tick is not ready.',

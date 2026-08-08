@@ -1,6 +1,7 @@
 import { advanceSimulationStep } from './advanceSimulation';
 import { FIXED_STEP_MICROSECONDS, clockUnitsForFixedStep } from './clock';
 import type { SimulationState } from './types';
+import type { SimulationContext } from './scenario';
 
 export const DEFAULT_MAX_STEPS_PER_PUMP = 100;
 
@@ -28,6 +29,7 @@ export const pumpSimulation = (
   simulation: SimulationState,
   runner: FixedStepRunnerState,
   elapsedMicroseconds: number,
+  context: SimulationContext,
   maxSteps = DEFAULT_MAX_STEPS_PER_PUMP,
 ): PumpSimulationResult => {
   assertNonNegativeSafeInteger(elapsedMicroseconds, 'elapsedMicroseconds');
@@ -63,7 +65,7 @@ export const pumpSimulation = (
     processedSteps < maxSteps
   ) {
     remainingMicroseconds -= FIXED_STEP_MICROSECONDS;
-    next = advanceSimulationStep(next);
+    next = advanceSimulationStep(next, context);
     processedSteps += 1;
 
     if (next.isSliceComplete) {

@@ -15,7 +15,7 @@ describe('region content schema', () => {
     });
     expect(greatPlainsRegion.initialEmployeePositions).toHaveLength(4);
     expect(greatPlainsRegion.workTargets).toHaveLength(4);
-    expect(greatPlainsRegion.jobs).toHaveLength(4);
+    expect(greatPlainsRegion.jobs).toHaveLength(6);
     expect(() =>
       assertStationGridDefinition(greatPlainsRegion.stationGrid),
     ).not.toThrow();

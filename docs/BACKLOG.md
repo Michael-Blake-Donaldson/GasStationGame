@@ -1,6 +1,6 @@
 # Great Plains Vertical-Slice Backlog
 
-Last updated: 2026-08-07
+Last updated: 2026-08-08
 
 This backlog implements the GDD milestone sequence. Priority is strict: finish and verify the current milestone before expanding the next. `P0` blocks the vertical slice, `P1` is required for the playtest gate, and `P2` is post-gate or optional polish.
 
@@ -26,7 +26,7 @@ This backlog implements the GDD milestone sequence. Priority is strict: finish a
 
 ## M2 — Playable day loop
 
-- [ ] **GS-020 (P0): Implement pumps, checkout, stock, and customers.** Acceptance: queues, service time, prices, stock, cash, fuel, and food produce explainable results during a complete day.
+- [x] **GS-020 (P0): Implement pumps, checkout, stock, and customers.** Acceptance met: authored traffic creates deterministic pump and checkout queues; staffed service snapshots bounded prices, consumes stock, earns exact cash, and emits causal arrival/sale/completion facts; daytime commands set prices and purchase fuel/food at exact wholesale cost; a complete staffed day reconciles all 82 customers and every unit/revenue change. The accessible shift board exposes staffing, prices, orders, queues, and served totals.
 - [ ] **GS-021 (P0): Implement employee skill and fatigue.** Acceptance: role skill and fatigue change speed/error outcomes; every modifier is inspectable and deterministic.
 - [ ] **GS-022 (P0): Implement construction rules.** Acceptance: store/garage use authored plots; wall, gate, floodlight, turret, ammo storage, repair station, and generator upgrade use flexible placement with cost, rotation, and validity feedback.
 - [ ] **GS-023 (P0): Validate paths after construction.** Acceptance: placement cannot silently strand required routes; invalidity identifies the blocked route or interaction cell.
